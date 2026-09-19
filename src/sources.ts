@@ -43,7 +43,7 @@ export function mapHnHit(hit: HnHit): Item | undefined {
 
 // Legitimate live source: the official Hacker News API, provided by Algolia.
 // Public, keyless, CORS-enabled, documented at https://hn.algolia.com/api.
-export function createHackerNewsSource(fetchFn: typeof fetch = fetch): SourceAdapter {
+export function createHackerNewsSource(fetchFn: typeof fetch = (input, init) => fetch(input, init)): SourceAdapter {
   return {
     id: 'hackernews',
     label: 'Hacker News (live)',
