@@ -12,16 +12,6 @@ Searches are saved in your browser, so they survive a refresh. One live source (
 
 **Live app:** https://dcr6174.github.io/cuttings/
 
-## See the app
-
-Mobile:
-
-![Cuttings mobile digest](docs/phase3-mobile.png)
-
-Desktop:
-
-![Cuttings desktop digest](docs/phase3-desktop.png)
-
 ## Core mode and Jev mode
 
 ### Core mode
