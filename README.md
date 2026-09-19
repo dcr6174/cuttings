@@ -10,6 +10,8 @@ Use Cuttings when you repeatedly check flats, jobs, grants, tenders, used produc
 
 Searches are saved in your browser, so they survive a refresh. One live source (Hacker News) is included, and Jev can check meaning questions in shadow mode.
 
+Need a one-off answer instead of a saved search? The always-visible **Search** button opens **Search now**: type what you want, run it against the current feed, and nothing is stored unless you press **Save this search**.
+
 **Live app:** https://dcr6174.github.io/cuttings/
 
 ## Core mode and Jev mode
@@ -68,7 +70,7 @@ To stop the app, press `Ctrl+C` in the terminal.
 ## First working example
 
 1. Run the app.
-2. Press the always-visible **Search** button at the bottom right, then choose **Flats near Indiranagar**. It uses the offline sample feed.
+2. Open the **Search** tab and choose **Flats near Indiranagar**. It uses the offline sample feed.
 3. Keep these conditions:
 
 ```text
@@ -90,9 +92,32 @@ Rejects: 1
 
 The strong match is **Sunlit one-bedroom near Indiranagar** at **₹28,000 / month**.
 
+## Search now: a one-off search that is not saved
+
+1. Press the always-visible **Search** button at the bottom right. It works from every tab.
+2. Type what you are looking for in plain English. Join rules with "and", or put one rule per line:
+
+```text
+Under ₹30,000 per month and posted within the last 2 days and one bedroom and balcony preferred
+```
+
+3. Choose a source: the offline sample feed or the live Hacker News source. For the live source, also type the words to search for.
+4. Press **Search now**.
+5. Read the results: strong matches, maybes, and the items that did not match. Open any result to see which rules passed or failed.
+
+Expected output with the sample feed and the example above:
+
+```text
+Strong matches: 1
+Maybes: 2
+Didn't match: 1
+```
+
+6. Press **Save this search** only if you want it to catch up later in Digest. Or close the panel and nothing is stored.
+
 ## Create or edit a search
 
-1. Press the always-visible **Search** button at the bottom right. It opens the existing search editor from any tab.
+1. Open the **Search** tab, or press the always-visible **Search** button and choose **Edit saved searches instead**.
 2. Pick a saved search, or press **New**.
 3. Choose a source: the offline sample feed or the live Hacker News source. For the live source, type the words to search for.
 4. Edit a condition directly in its text field.
@@ -216,7 +241,7 @@ Run everything:
 npm run check
 ```
 
-This runs TypeScript checks, 116 tests, and a production build.
+This runs TypeScript checks, 121 tests, and a production build.
 
 Run one part:
 
@@ -304,9 +329,10 @@ A 400 means the app sent something the proxy refuses (too many questions, an une
 
 ## Project map
 
-- `src/App.tsx`: mobile-first UI, digest, search editor, rejects, Jev tab
+- `src/App.tsx`: mobile-first UI, digest, Search now panel, saved-search editor, rejects, Jev tab
 - `src/style.css`: editorial layout, motion, and reduced-motion support
 - `src/parser.ts`: condition parser
+- `src/conditions.ts`: shared condition assembly for saved searches and Search now
 - `src/engine.ts`: deterministic checks and ranking
 - `src/fixture-evaluator.ts`: keyless semantic test evaluator
 - `src/jev.ts`: TypeSafe Jev shadow evaluator
@@ -320,4 +346,4 @@ A 400 means the app sent something the proxy refuses (too many questions, an une
 
 ## Current status
 
-Phase 3 working web app, live at https://dcr6174.github.io/cuttings/. Searches persist in the browser, one legitimate live source is included, and Jev runs in shadow mode with replayable provenance and calibration. Real Jev answers are served through the deployed Cloudflare Worker proxy; the key never leaves the server. Jev answers do not influence ranking yet. Cuttings is not an always-on background service.
+Phase 3 working web app, live at https://dcr6174.github.io/cuttings/. Searches persist in the browser, a one-off Search now mode runs the same parser and engine without saving, one legitimate live source is included, and Jev runs in shadow mode with replayable provenance and calibration. Real Jev answers are served through the deployed Cloudflare Worker proxy; the key never leaves the server. Jev answers do not influence ranking yet. Cuttings is not an always-on background service.
