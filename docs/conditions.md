@@ -69,3 +69,19 @@ The context supports `live` and `shadow` modes plus optional human labels. Shado
 ## Scope
 
 No NLP library, model fallback, or learned parser. The parser is deliberately regex-only and semantic by default. Fixtures include both accepted phrases and deliberate fall-through cases.
+
+## Phase 3 additions
+
+### Persistence
+
+Saved searches, shadow provenance, and human labels live in browser storage under the keys `cuttings:v1:searches`, `cuttings:v1:provenance` (capped at 250 records), and `cuttings:v1:labels`. Corrupt or malformed stored data is discarded safely, never guessed. The app works fully in memory when storage is unavailable.
+
+### Live sources
+
+A source adapter converts an external feed into `Item`. The first legitimate live adapter is the official Hacker News API provided by Algolia (`https://hn.algolia.com/api`, public, keyless, CORS-enabled). Adapters preserve the original URL and source name and never invent fields the source did not supply; a missing amount or date produces `could-not-check`, which maps to `maybe`.
+
+### Shadow mode and calibration
+
+`mode: 'shadow'` runs a second evaluator without letting it influence ranking. The keyless run always decides strong, maybe, and reject. Shadow judgments are stored as replayable provenance (question, criteria, threshold, evaluator version, raw result, confidence, accepted result, timestamp, item and search id). Human labels are collected per question and item. `summarizeCalibration` reports agreement over answered labeled records and accuracy per confidence bucket; a refused answer is never counted as right or wrong. `replayAccepted` recomputes the accept line for any threshold from the stored raw values alone, so calibration never requires calling the evaluator again.
+
+The Jev evaluator speaks to `POST https://api.typesafe.ai/v1/systemone` with a Bearer key, model `jev-latest`, and one `noul` question per semantic condition. A noul answer is the probability of "yes"; the accepted result is `p >= 0.5`, and confidence is `max(p, 1 - p)`. The client backs off once on 429/529 and never retries other failures. The API key is held in memory for the session only and is never written to storage, logs, URLs, or the repository.
