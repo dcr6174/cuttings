@@ -68,7 +68,7 @@ To stop the app, press `Ctrl+C` in the terminal.
 ## First working example
 
 1. Run the app.
-2. Open the **Search** tab and choose **Flats near Indiranagar**. It uses the offline sample feed.
+2. Press the always-visible **Search** button at the bottom right, then choose **Flats near Indiranagar**. It uses the offline sample feed.
 3. Keep these conditions:
 
 ```text
@@ -92,7 +92,7 @@ The strong match is **Sunlit one-bedroom near Indiranagar** at **₹28,000 / mon
 
 ## Create or edit a search
 
-1. Open **Search**.
+1. Press the always-visible **Search** button at the bottom right. It opens the existing search editor from any tab.
 2. Pick a saved search, or press **New**.
 3. Choose a source: the offline sample feed or the live Hacker News source. For the live source, type the words to search for.
 4. Edit a condition directly in its text field.
