@@ -7,7 +7,9 @@ export class FixtureEvaluator implements SemanticEvaluator {
   async evaluate(item: Item, questions: readonly SemanticQuestion[], _context: EvaluationContext): Promise<SemanticJudgments> {
     const row = this.fixtures[item.id] ?? {};
     return Object.fromEntries(questions.map(question => {
-      const label = row[question.id];
+      // Keyed by condition id first, then by the lowercase question text, so a
+      // fixture survives condition ids changing as a search is edited.
+      const label = row[question.id] ?? row[question.ask.toLowerCase()];
       const judgment: SemanticJudgment = typeof label === 'object' && label !== null
         ? { result: label.result, confidence: label.confidence ?? 1, evaluatorVersion: this.version }
         : { result: label ?? null, confidence: label === undefined || label === null ? 0 : 1, evaluatorVersion: this.version };
