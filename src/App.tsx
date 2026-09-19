@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { evaluateItem, type Evaluation } from './engine';
-import { parseCondition } from './parser';
+import { splitConditions } from './parser';
+import { buildConditions } from './conditions';
 import { FixtureEvaluator } from './fixture-evaluator';
 import { JevEvaluator } from './jev';
 import { sources } from './sources';
@@ -74,7 +76,7 @@ function reasonData(evaluation: Evaluation, conditions: readonly Condition[]): {
 }
 
 interface Run {
-  status: 'loading' | 'ready' | 'error';
+  status: 'idle' | 'loading' | 'ready' | 'error';
   items: Item[];
   evaluations: Record<string, Evaluation>;
   error?: string;
@@ -99,16 +101,22 @@ export function App() {
   const [labels, setLabels] = useState<Record<string, boolean>>(() => loadLabels());
   const [replayThreshold, setReplayThreshold] = useState(THRESHOLD);
   const searchEditor = useRef<HTMLElement>(null);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickText, setQuickText] = useState('');
+  const [quickSourceId, setQuickSourceId] = useState('sample-flats');
+  const [quickQuery, setQuickQuery] = useState('');
+  const [quickRun, setQuickRun] = useState<Run>({ status: 'idle', items: [], evaluations: {} });
+  const [quickOpenId, setQuickOpenId] = useState<string | null>(null);
+  const [quickSaved, setQuickSaved] = useState(false);
+  const [showQuickMaybe, setShowQuickMaybe] = useState(true);
+  const [showQuickRejects, setShowQuickRejects] = useState(false);
 
   useEffect(() => { saveSearches(searches); }, [searches]);
   useEffect(() => { saveLabels(labels); }, [labels]);
 
   const search = searches.find(s => s.id === selectedId) ?? searches[0];
-  const conditions: Condition[] = useMemo(() => (search?.conditions ?? []).map((raw, i) => ({
-    ...parseCondition(raw),
-    id: `c${i}`,
-    requirement: raw.toLowerCase().includes('preferred') ? 'preferred' : 'required',
-  } as Condition)), [search]);
+  const conditions: Condition[] = useMemo(() => buildConditions(search?.conditions ?? []), [search]);
+  const quickConditions: Condition[] = useMemo(() => buildConditions(quickText), [quickText]);
 
   const runKey = search ? JSON.stringify({ id: search.id, sourceId: search.sourceId, query: search.query, conditions: search.conditions }) : '';
   useEffect(() => {
@@ -134,6 +142,13 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runKey]);
 
+  useEffect(() => {
+    if (!quickOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setQuickOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [quickOpen]);
+
   if (!search) return <main><p className="intro">No saved searches yet.</p></main>;
 
   const updateSearch = (patch: Partial<SavedSearch>) => {
@@ -153,12 +168,40 @@ export function App() {
     });
   };
   const addCondition = () => { const value = draft.trim(); if (value) { updateSearch({ conditions: [...search.conditions, value] }); setDraft(''); } };
-  const openSearch = () => {
-    setTab('search');
-    window.requestAnimationFrame(() => {
-      searchEditor.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      searchEditor.current?.querySelector<HTMLElement>('select, input')?.focus({ preventScroll: true });
-    });
+  const quickSource = sources[quickSourceId] ?? sources['sample-flats']!;
+  const runQuick = async () => {
+    if (quickConditions.length === 0) return;
+    const evaluator = new FixtureEvaluator(SAMPLE_FIXTURES);
+    setQuickSaved(false);
+    setQuickRun({ status: 'loading', items: [], evaluations: {} });
+    try {
+      const items = await quickSource.fetchItems(quickQuery.trim());
+      const evaluations: Record<string, Evaluation> = {};
+      for (const item of items) {
+        evaluations[item.id] = await evaluateItem(item, quickConditions, evaluator, THRESHOLD);
+      }
+      setQuickRun({ status: 'ready', items, evaluations, ranAt: new Date() });
+    } catch (error) {
+      setQuickRun({ status: 'error', items: [], evaluations: {}, error: error instanceof Error ? error.message : 'The source failed.' });
+    }
+  };
+  const saveQuick = () => {
+    const raws = splitConditions(quickText);
+    if (raws.length === 0) return;
+    const at = new Date().toISOString();
+    const first = raws[0]!;
+    const fresh: SavedSearch = {
+      id: `search-${Date.now()}`,
+      name: first.length > 40 ? `${first.slice(0, 40)}…` : first,
+      sourceId: quickSourceId,
+      query: quickQuery.trim(),
+      conditions: raws,
+      createdAt: at,
+      updatedAt: at,
+    };
+    setSearches(list => [...list, fresh]);
+    setSelectedId(fresh.id);
+    setQuickSaved(true);
   };
 
   const groups = { strong: [] as Item[], maybe: [] as Item[], reject: [] as Item[] };
@@ -166,26 +209,37 @@ export function App() {
     const outcome = run.evaluations[item.id]?.outcome ?? 'maybe';
     groups[outcome].push(item);
   }
+  const quickGroups = { strong: [] as Item[], maybe: [] as Item[], reject: [] as Item[] };
+  for (const item of quickRun.items) {
+    const outcome = quickRun.evaluations[item.id]?.outcome ?? 'maybe';
+    quickGroups[outcome].push(item);
+  }
 
-  const card = (item: Item, kind: string) => {
-    const evaluation = run.evaluations[item.id];
-    const { reasons, misses } = evaluation ? reasonData(evaluation, conditions) : { reasons: [], misses: [] };
+  const listingCard = (item: Item, kind: string, evaluation: Evaluation | undefined, conds: readonly Condition[], openId: string | null, toggleOpen: (id: string) => void, extra?: ReactNode) => {
+    const { reasons, misses } = evaluation ? reasonData(evaluation, conds) : { reasons: [], misses: [] };
     const amount = formatAmount(item.amount);
-    return <article key={item.id} className={`listing ${kind} ${open === item.id ? 'is-open' : ''}`}>
-      <button className="listing-head" onClick={() => setOpen(open === item.id ? null : item.id)} aria-expanded={open === item.id}>
+    return <article key={item.id} className={`listing ${kind} ${openId === item.id ? 'is-open' : ''}`}>
+      <button className="listing-head" onClick={() => toggleOpen(item.id)} aria-expanded={openId === item.id}>
         <span><small>{item.source} · {ageLabel(item.publishedAt)}</small><h3>{item.title}</h3><p>{amount ? `${amount} · ` : ''}<a href={item.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Original ↗</a></p></span>
-        <b>{reasons.length}/{conditions.length}</b>
+        <b>{reasons.length}/{conds.length}</b>
       </button>
       <div className="listing-body">
         <p>{item.text || 'No description supplied by the source.'}</p>
         <ul>{reasons.map(x => <li key={x}>✓ {x}</li>)}</ul>
         {misses.map(x => <p className="miss" key={x}>{x}</p>)}
-        {kind === 'reject' && (corrections[item.id]
-          ? <p className="note">Marked for correction. Adjust the conditions in the Search tab.</p>
-          : <button className="promote" onClick={() => setCorrections(c => ({ ...c, [item.id]: true }))}>This should be a maybe</button>)}
+        {extra}
       </div>
     </article>;
   };
+
+  const card = (item: Item, kind: string) => listingCard(item, kind, run.evaluations[item.id], conditions, open, id => setOpen(open === id ? null : id),
+    kind === 'reject'
+      ? (corrections[item.id]
+        ? <p className="note">Marked for correction. Adjust the conditions in the Search tab.</p>
+        : <button className="promote" onClick={() => setCorrections(c => ({ ...c, [item.id]: true }))}>This should be a maybe</button>)
+      : undefined);
+
+  const quickCard = (item: Item, kind: string) => listingCard(item, kind, quickRun.evaluations[item.id], quickConditions, quickOpenId, id => setQuickOpenId(current => current === id ? null : id));
 
   const questions = semanticQuestions(conditions);
   const runShadow = async () => {
@@ -253,9 +307,36 @@ export function App() {
       <button className={tab === 'rejects' ? 'active' : ''} onClick={() => setTab('rejects')}>Rejects <span>{groups.reject.length}</span></button>
       <button className={tab === 'jev' ? 'active' : ''} onClick={() => setTab('jev')}>Jev</button>
     </nav>
-    <button className="universal-search" onClick={openSearch} aria-label="Open search editor">
+    <button className="universal-search" onClick={() => setQuickOpen(true)} aria-label="Search now">
       <span aria-hidden>⌕</span> Search
     </button>
+
+    {quickOpen && <div className="quick-sheet" role="dialog" aria-modal="true" aria-label="Search now" onClick={e => { if (e.target === e.currentTarget) setQuickOpen(false); }}>
+      <div className="quick-panel">
+        <div className="section-title"><div><p className="eyebrow">One-off search</p><h2>Search now</h2></div><button className="quick-close" onClick={() => setQuickOpen(false)} aria-label="Close">×</button></div>
+        <p className="intro">Type what you are looking for in plain English. Join rules with "and", or put one rule per line. It runs once against the current feed. Nothing is saved unless you press <strong>Save this search</strong>.</p>
+        <textarea className="quick-input" rows={3} autoFocus value={quickText} onChange={e => { setQuickText(e.target.value); setQuickSaved(false); }} placeholder="Under ₹30,000 per month and posted within the last 2 days and one bedroom" aria-label="What are you looking for" />
+        <div className="picker">
+          <select aria-label="Source" value={quickSourceId} onChange={e => setQuickSourceId(e.target.value)}>{Object.values(sources).map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+          <button onClick={runQuick} disabled={quickRun.status === 'loading' || quickConditions.length === 0}>{quickRun.status === 'loading' ? 'Searching…' : 'Search now'}</button>
+        </div>
+        {quickSource.kind === 'live' && <div className="picker"><input aria-label="Live source query" value={quickQuery} onChange={e => setQuickQuery(e.target.value)} placeholder="Words to search for" /></div>}
+        {quickConditions.length > 0 && <div className="diagnosis"><strong>{quickConditions.filter(x => x.mode === 'exact').length} exact</strong><span>{quickConditions.filter(x => x.mode === 'semantic').length} meaning</span><span>{quickConditions.filter(x => x.mode === 'ambiguous').length} needs attention</span></div>}
+        {quickRun.status === 'loading' && <p className="intro">Checking {quickSource.label}…</p>}
+        {quickRun.status === 'error' && <p className="miss">Could not load {quickSource.label}: {quickRun.error}</p>}
+        {quickRun.status === 'ready' && <>
+          <section><h2 className="band">Strong matches <span>{quickGroups.strong.length}</span></h2>{quickGroups.strong.map(x => quickCard(x, 'strong'))}</section>
+          <section><button className="drawer" onClick={() => setShowQuickMaybe(!showQuickMaybe)} aria-expanded={showQuickMaybe}><span>Maybes <b>{quickGroups.maybe.length}</b></span><span>{showQuickMaybe ? '−' : '+'}</span></button>{showQuickMaybe && <div className="drawer-body">{quickGroups.maybe.map(x => quickCard(x, 'maybe'))}</div>}</section>
+          <section><button className="drawer" onClick={() => setShowQuickRejects(!showQuickRejects)} aria-expanded={showQuickRejects}><span>Didn't match <b>{quickGroups.reject.length}</b></span><span>{showQuickRejects ? '−' : '+'}</span></button>{showQuickRejects && <div className="drawer-body">{quickGroups.reject.map(x => quickCard(x, 'reject'))}</div>}</section>
+          <div className="quick-save">
+            {quickSaved
+              ? <><p className="note">Saved to your searches. It will catch up in Digest from now on.</p><button className="promote" onClick={() => { setQuickOpen(false); setTab('digest'); }}>Open digest</button></>
+              : <button className="promote" onClick={saveQuick}>Save this search</button>}
+          </div>
+        </>}
+        <p className="quick-editor"><button onClick={() => { setQuickOpen(false); setTab('search'); }}>Edit saved searches instead</button></p>
+      </div>
+    </div>}
 
     {tab === 'digest' && <section className="view settle">
       <div className="section-title"><div><p className="eyebrow">{search.name}</p><h2>Your catch-up</h2></div><span>{run.items.length} read</span></div>
@@ -343,4 +424,4 @@ export function App() {
 
     <footer><span>{source.label}</span><span>{run.ranAt ? `Last run ${run.ranAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : 'Not run yet'}</span></footer>
   </main>;
-}
+                                                                                                             }
