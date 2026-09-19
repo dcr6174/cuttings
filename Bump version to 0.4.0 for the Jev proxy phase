@@ -1,6 +1,6 @@
 {
   "name": "cuttings",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": false,
   "description": "Saved searches that catch up automatically, with visible exact checks and optional semantic evaluation.",
   "type": "module",
