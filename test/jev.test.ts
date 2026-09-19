@@ -53,3 +53,30 @@ describe('JevEvaluator', () => {
     await expect(evaluator.evaluate(item, questions, { confidenceThreshold: 0.75, mode: 'shadow' })).rejects.toThrow('API key');
   });
 });
+
+describe('JevEvaluator through the proxy', () => {
+  it('sends no key and no authorization header when a proxy URL is used', async () => {
+    const calls: string[] = [];
+    const evaluator = new JevEvaluator('', { baseUrl: 'https://cuttings-jev-proxy.example', fetchFn: mockFetch(200, { answers: { c0: { noul: 0.8 }, c1: { noul: 0.2 } } }, calls), sleep: noSleep });
+    const judgments = await evaluator.evaluate(item, questions, { confidenceThreshold: 0.75, mode: 'shadow' });
+    expect(calls[0]).toBe('https://cuttings-jev-proxy.example/v1/systemone ');
+    expect(judgments['c0']?.result).toBe(true);
+  });
+  it('batches more than 4 questions into separate requests', async () => {
+    const many: SemanticQuestion[] = ['q0', 'q1', 'q2', 'q3', 'q4'].map(id => ({ id, ask: `Is this ${id}?`, expect: true, criteria: id }));
+    const urls: string[] = [];
+    const bodies: string[] = [];
+    const fetchFn = (async (_url: unknown, init?: { body?: string }) => {
+      urls.push(String(_url));
+      bodies.push(String(init?.body ?? ''));
+      return { ok: true, status: 200, json: async () => ({ answers: Object.fromEntries(many.map(q => [q.id, { noul: 0.9 }])) }), text: async () => '' } as Response;
+    }) as typeof fetch;
+    const evaluator = new JevEvaluator('', { baseUrl: 'https://proxy.example', fetchFn, sleep: noSleep });
+    const judgments = await evaluator.evaluate(item, many, { confidenceThreshold: 0.75, mode: 'shadow' });
+    expect(urls).toHaveLength(2);
+    expect(JSON.parse(bodies[0]!).questions).toHaveProperty('q3');
+    expect(JSON.parse(bodies[0]!).questions).not.toHaveProperty('q4');
+    expect(JSON.parse(bodies[1]!).questions).toHaveProperty('q4');
+    expect(Object.keys(judgments)).toHaveLength(5);
+  });
+});
