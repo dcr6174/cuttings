@@ -2,3 +2,8 @@ export * from './types.js';
 export * from './parser.js';
 export * from './engine.js';
 export * from './fixture-evaluator.js';
+export * from './jev.js';
+export * from './calibration.js';
+export * from './sources.js';
+export * from './sample-feed.js';
+export * from './store.js';
