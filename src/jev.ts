@@ -32,7 +32,7 @@ export class JevEvaluator implements SemanticEvaluator {
   constructor(private readonly apiKey: string, options: JevOptions = {}) {
     this.model = options.model ?? 'jev-latest';
     this.baseUrl = (options.baseUrl ?? 'https://api.typesafe.ai').replace(/\/+$/, '');
-    this.fetchFn = options.fetchFn ?? fetch;
+    this.fetchFn = options.fetchFn ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
     this.sleep = options.sleep ?? ((ms: number) => new Promise(resolve => setTimeout(resolve, ms)));
     this.maxRetries = options.maxRetries ?? 1;
     this.version = `jev:${this.model}`;
