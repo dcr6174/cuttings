@@ -8,7 +8,7 @@ Use Cuttings when you repeatedly check flats, jobs, grants, tenders, used produc
 - **Maybes**: a preferred check missed, information is missing, or the answer is uncertain.
 - **Rejects**: a required check failed. Rejects stay visible so you can correct the search.
 
-The current app is a Phase 2 demo. It uses a local sample flats feed. It does not run in the background and it does not contact Jev yet.
+Searches are saved in your browser, so they survive a refresh. One live source (Hacker News) is included, and Jev can check meaning questions in shadow mode.
 
 **Live app:** https://dcr6174.github.io/cuttings/
 
@@ -16,11 +16,11 @@ The current app is a Phase 2 demo. It uses a local sample flats feed. It does no
 
 Mobile:
 
-![Cuttings mobile digest](docs/1-cloud-browser-20260919-045054.png)
+![Cuttings mobile digest](docs/phase3-mobile.png)
 
 Desktop:
 
-![Cuttings desktop digest](docs/2-cloud-browser-20260919-045100.png)
+![Cuttings desktop digest](docs/phase3-desktop.png)
 
 ## Core mode and Jev mode
 
@@ -35,11 +35,19 @@ Core mode needs no API key. It uses deterministic code for facts such as:
 
 If the app cannot safely compare a value, it says so. It does not guess.
 
-### Jev mode
+### Jev shadow mode
 
-Jev mode is planned for a later phase. It will answer narrow meaning questions such as "Does this flat mention a balcony?"
+Jev can answer narrow meaning questions such as "Does this flat mention a balcony?"
 
-Jev will be optional. Low-confidence answers will go to **Maybe**. Exact prices and dates will still be checked by code.
+In Phase 3, Jev runs in **shadow mode**:
+
+1. Ranking always stays keyless. Jev answers never change strong, maybe, or reject.
+2. Every Jev answer is stored as replayable provenance: the question, criteria, threshold, model version, raw answer, confidence, and time.
+3. You label answers as correct or wrong. The app then shows how often Jev agrees with you, bucketed by confidence, and lets you replay the accept line at any threshold.
+
+This is how trust is earned before Jev is allowed to influence ranking in a later phase.
+
+The TypeSafe API key is typed into the Jev tab and is kept for that browser tab only. It is never saved, synced, logged, or committed.
 
 ## What you need
 
@@ -70,7 +78,7 @@ To stop the app, press `Ctrl+C` in the terminal.
 ## First working example
 
 1. Run the app.
-2. Open the **Search** tab.
+2. Open the **Search** tab and choose **Flats near Indiranagar**. It uses the offline sample feed.
 3. Keep these conditions:
 
 ```text
@@ -94,32 +102,51 @@ The strong match is **Sunlit one-bedroom near Indiranagar** at **₹28,000 / mon
 
 ## Create or edit a search
 
-The current demo has one editable sample search.
-
 1. Open **Search**.
-2. Edit a condition directly in its text field.
-3. Use **Add a condition** to add another rule.
-4. Use **×** to remove a rule.
-5. Read the label above each rule:
+2. Pick a saved search, or press **New**.
+3. Choose a source: the offline sample feed or the live Hacker News source. For the live source, type the words to search for.
+4. Edit a condition directly in its text field.
+5. Use **Add a condition** to add another rule. Use **×** to remove one.
+6. Read the label above each rule:
    - **Exact** means local code can check it.
    - **Meaning** means a semantic evaluator is needed.
    - **Needs attention** means the parser found something unclear.
-6. Open **Digest** to inspect strong matches and maybes.
-7. Open **Rejects** to inspect failed rules. Use **This should be a maybe** to see the correction-loop action in the demo.
+7. Open **Digest** to inspect strong matches and maybes.
+8. Open **Rejects** to inspect failed rules. Use **This should be a maybe** to mark a result for correction.
 
-Search changes currently live in memory only. Refreshing the page resets the demo.
+Every change is saved in this browser automatically. Refresh the page and the searches are still there.
+
+## The live Hacker News source
+
+The app includes one legitimate live source: the official Hacker News API provided by Algolia (`https://hn.algolia.com/api`). It is public, needs no key, and allows browser access.
+
+- Stories are converted into the small `Item` shape in `src/types.ts`.
+- The original story URL and "Hacker News" source name are preserved.
+- Fields the source does not supply, such as price, stay empty. Exact price checks then report "could not check" and the item becomes a maybe. The app never invents data.
 
 ## How catch-up works
 
-Cuttings v1 is local-first:
+Cuttings is local-first:
 
-1. A saved search keeps the time of its last run.
-2. When you open it, a source adapter requests newer items.
+1. A saved search keeps its source, query, and conditions in your browser.
+2. When you open it, the source adapter requests current items.
 3. Exact checks run first.
 4. Required exact failures are rejected before any semantic work.
 5. Remaining results become strong matches, maybes, or rejects.
 
-The Phase 2 UI uses sample data and shows a sample last-run time. Persistent saved searches and a live source adapter are Phase 3 work. Cuttings is not an always-on background service yet.
+Cuttings is not an always-on background service yet. It catches up when you open it.
+
+## Use Jev shadow mode
+
+1. Open the **Jev** tab.
+2. Paste your TypeSafe API key. It stays in the tab only.
+3. Press **Run shadow check**. Jev answers the search's meaning questions for up to 10 items, one batched API call per item.
+4. Mark each answer **Correct** or **Wrong**.
+5. Watch the calibration summary: agreement percentage and accuracy by confidence bucket.
+6. Move the replay threshold to see how many stored answers would be accepted at each level.
+7. Use **Download provenance JSON** to keep the full replayable record.
+
+The keyless digest keeps working even if the shadow run fails.
 
 ## Add a legitimate source adapter
 
@@ -144,7 +171,7 @@ Run everything:
 npm run check
 ```
 
-This runs TypeScript checks, 73 tests, and a production build.
+This runs TypeScript checks, 97 tests, and a production build.
 
 Run one part:
 
@@ -158,7 +185,7 @@ A successful build creates `dist/`.
 
 ## No API key behavior
 
-You do not need a key to run the app, parser, exact engine, tests, or sample UI.
+You do not need a key to run the app, parser, exact engine, tests, sources, or sample UI.
 
 Without Jev:
 
@@ -208,24 +235,33 @@ Run `npm run build`. The Vite base path must remain `/cuttings/` in `vite.config
 
 Enable Pages first: **Settings → Pages → Source → GitHub Actions**. The workflow also requests Pages enablement for a new repository.
 
-### A condition says “Needs attention”
+### A condition says "Needs attention"
 
 Rewrite it with one clear comparison. Example: change `budget 30000` to `Under ₹30,000 per month`.
 
-### Search edits disappear after refresh
+### The live source shows an error
 
-That is expected in the Phase 2 demo. Browser persistence is not connected yet.
+The Hacker News API may be down or unreachable. The sample feed keeps working offline. Your searches and labels are not lost.
+
+### Shadow mode fails with a 401
+
+The TypeSafe API key is wrong or expired. Enter a fresh key in the Jev tab. The keyless digest is unaffected.
 
 ## Project map
 
-- `src/App.tsx`: mobile-first demo UI and sample feed
+- `src/App.tsx`: mobile-first UI, digest, search editor, rejects, Jev tab
 - `src/style.css`: editorial layout, motion, and reduced-motion support
 - `src/parser.ts`: condition parser
 - `src/engine.ts`: deterministic checks and ranking
 - `src/fixture-evaluator.ts`: keyless semantic test evaluator
+- `src/jev.ts`: TypeSafe Jev shadow evaluator
+- `src/calibration.ts`: confidence calibration and threshold replay
+- `src/sources.ts`: source adapters, including live Hacker News
+- `src/sample-feed.ts`: offline sample flats feed and fixtures
+- `src/store.ts`: browser persistence for searches, provenance, and labels
 - `docs/conditions.md`: parser and UI contract
-- `test/`: 66 parser fixtures and 7 engine/pipeline tests
+- `test/`: parser fixtures plus engine, source, store, Jev, and calibration tests
 
 ## Current status
 
-Phase 2 working web app. Local sample feed only. Jev and one legitimate live feed/API come next.
+Phase 3 working web app. Searches persist in the browser, one legitimate live source is included, and Jev runs in shadow mode with replayable provenance and calibration. Jev answers do not influence ranking yet. Cuttings is not an always-on background service.
