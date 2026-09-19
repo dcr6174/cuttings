@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { evaluateItem, type Evaluation } from './engine';
 import { parseCondition } from './parser';
 import { FixtureEvaluator } from './fixture-evaluator';
@@ -98,6 +98,7 @@ export function App() {
   const [provenance, setProvenance] = useState<StoredProvenance[]>(() => loadProvenance());
   const [labels, setLabels] = useState<Record<string, boolean>>(() => loadLabels());
   const [replayThreshold, setReplayThreshold] = useState(THRESHOLD);
+  const searchEditor = useRef<HTMLElement>(null);
 
   useEffect(() => { saveSearches(searches); }, [searches]);
   useEffect(() => { saveLabels(labels); }, [labels]);
@@ -152,6 +153,13 @@ export function App() {
     });
   };
   const addCondition = () => { const value = draft.trim(); if (value) { updateSearch({ conditions: [...search.conditions, value] }); setDraft(''); } };
+  const openSearch = () => {
+    setTab('search');
+    window.requestAnimationFrame(() => {
+      searchEditor.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      searchEditor.current?.querySelector<HTMLElement>('select, input')?.focus({ preventScroll: true });
+    });
+  };
 
   const groups = { strong: [] as Item[], maybe: [] as Item[], reject: [] as Item[] };
   for (const item of run.items) {
@@ -245,6 +253,9 @@ export function App() {
       <button className={tab === 'rejects' ? 'active' : ''} onClick={() => setTab('rejects')}>Rejects <span>{groups.reject.length}</span></button>
       <button className={tab === 'jev' ? 'active' : ''} onClick={() => setTab('jev')}>Jev</button>
     </nav>
+    <button className="universal-search" onClick={openSearch} aria-label="Open search editor">
+      <span aria-hidden>⌕</span> Search
+    </button>
 
     {tab === 'digest' && <section className="view settle">
       <div className="section-title"><div><p className="eyebrow">{search.name}</p><h2>Your catch-up</h2></div><span>{run.items.length} read</span></div>
@@ -256,7 +267,7 @@ export function App() {
       </>}
     </section>}
 
-    {tab === 'search' && <section className="view">
+    {tab === 'search' && <section className="view search-editor" ref={searchEditor}>
       <div className="section-title"><div><p className="eyebrow">Saved searches</p><h2>{search.name}</h2></div></div>
       <div className="picker">
         <select aria-label="Choose a saved search" value={search.id} onChange={e => setSelectedId(e.target.value)}>{searches.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
