@@ -58,7 +58,13 @@ The user always sees which lane a condition is in.
 4. Send all remaining semantic questions for one item to the evaluator in one batched call.
 5. Keep three outcomes: `strong`, `maybe`, `reject`. Missing comparable data produces `maybe`, never a guessed pass or silent deletion.
 
-The `SemanticEvaluator.evaluate(item, questions[])` interface makes batching part of the contract. Core mode uses exact checks and the fixture evaluator. Jev mode can later implement the same interface.
+The `SemanticEvaluator.evaluate(item, questions[], context)` interface makes batching part of the contract. Each atomic question includes explicit criteria. Core mode uses exact checks and the fixture evaluator. Jev mode can later implement the same interface.
+
+## Confidence and provenance
+
+Every semantic decision persists replayable provenance: condition ID, atomic question, criteria, configured confidence threshold, evaluator/model version, raw result, confidence, accepted result, mode, and any human label used for calibration. A result below the threshold is accepted as `null`, which maps the item to `maybe`; uncertainty is never forced into pass or fail.
+
+The context supports `live` and `shadow` modes plus optional human labels. Shadow mode records the same judgments and provenance without requiring a ranking decision to become a production action. This lets later evaluators be calibrated against deterministic fixtures and human labels while keeping the parser and item schema unchanged.
 
 ## Scope
 
