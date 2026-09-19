@@ -26,8 +26,31 @@ export type Check =
   | { status: 'pass' | 'fail'; condition: Condition; actual: number | string }
   | { status: 'could-not-check'; condition: Condition; reason: string };
 
-export interface SemanticQuestion { id: string; ask: string; expect: boolean }
-export type SemanticAnswers = Record<string, boolean | null>;
+export interface SemanticQuestion { id: string; ask: string; expect: boolean; criteria: string }
+export interface SemanticJudgment {
+  result: boolean | null;
+  confidence: number;
+  evaluatorVersion: string;
+}
+export type SemanticJudgments = Record<string, SemanticJudgment>;
+export interface EvaluationContext {
+  confidenceThreshold: number;
+  mode?: 'live' | 'shadow';
+  humanLabels?: Record<string, boolean>;
+}
 export interface SemanticEvaluator {
-  evaluate(item: Item, questions: readonly SemanticQuestion[]): Promise<SemanticAnswers>;
+  readonly version: string;
+  evaluate(item: Item, questions: readonly SemanticQuestion[], context: EvaluationContext): Promise<SemanticJudgments>;
+}
+export interface EvaluationProvenance {
+  conditionId: string;
+  question: string;
+  criteria: string;
+  confidenceThreshold: number;
+  evaluatorVersion: string;
+  confidence: number;
+  result: boolean | null;
+  acceptedResult: boolean | null;
+  mode: 'live' | 'shadow';
+  humanLabel?: boolean;
 }
