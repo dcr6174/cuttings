@@ -1,4 +1,4 @@
-import type { Check, Condition, Item, Period, SemanticEvaluator, SemanticQuestion } from './types.js';
+import type { Check, Condition, EvaluationProvenance, Item, Period, SemanticEvaluator, SemanticQuestion } from './types.js';
 
 const FACTOR: Record<Period, number> = { hour: 1, week: 24 * 7, month: 24 * 365.25 / 12, year: 24 * 365.25, once: 1 };
 function compare(actual: number, op: string, expected: number | number[]): boolean {
@@ -28,29 +28,36 @@ export function runExact(item: Item, condition: Condition): Check {
   return { status: compare(timestamp, condition.op, condition.value) ? 'pass' : 'fail', condition, actual: raw };
 }
 
-export type Evaluation = { outcome: 'strong' | 'maybe' | 'reject'; checks: Check[]; semantic: Record<string, boolean | null> };
-export async function evaluateItem(item: Item, conditions: readonly Condition[], evaluator: SemanticEvaluator): Promise<Evaluation> {
+export type Evaluation = { outcome: 'strong' | 'maybe' | 'reject'; checks: Check[]; semantic: Record<string, boolean | null>; provenance: EvaluationProvenance[] };
+export async function evaluateItem(item: Item, conditions: readonly Condition[], evaluator: SemanticEvaluator, confidenceThreshold = 0.75, mode: 'live' | 'shadow' = 'live', humanLabels?: Record<string, boolean>): Promise<Evaluation> {
   const exacts = conditions.filter(c => c.mode === 'exact');
   const checks: Check[] = [];
   for (const condition of exacts) {
     const check = runExact(item, condition);
     checks.push(check);
-    if (condition.requirement === 'required' && check.status === 'fail') return { outcome: 'reject', checks, semantic: {} };
+    if (condition.requirement === 'required' && check.status === 'fail') return { outcome: 'reject', checks, semantic: {}, provenance: [] };
   }
   const semanticConditions = conditions.filter(c => c.mode !== 'exact');
   const questions: SemanticQuestion[] = semanticConditions.map(c => c.mode === 'semantic'
-    ? { id: c.id, ask: c.ask, expect: c.expect }
-    : { id: c.id, ask: c.raw, expect: true });
-  const answers = questions.length ? await evaluator.evaluate(item, questions) : {};
+    ? { id: c.id, ask: c.ask, expect: c.expect, criteria: c.raw }
+    : { id: c.id, ask: c.raw, expect: true, criteria: c.reason });
+  const judgments = questions.length ? await evaluator.evaluate(item, questions, { confidenceThreshold, mode, ...(humanLabels ? { humanLabels } : {}) }) : {};
+  const semantic: Record<string, boolean | null> = {};
+  const provenance: EvaluationProvenance[] = questions.map(question => {
+    const judgment = judgments[question.id] ?? { result: null, confidence: 0, evaluatorVersion: evaluator.version };
+    const acceptedResult = judgment.result !== null && judgment.confidence >= confidenceThreshold ? judgment.result : null;
+    semantic[question.id] = acceptedResult;
+    return { conditionId: question.id, question: question.ask, criteria: question.criteria, confidenceThreshold, evaluatorVersion: judgment.evaluatorVersion, confidence: judgment.confidence, result: judgment.result, acceptedResult, mode, ...(humanLabels?.[question.id] === undefined ? {} : { humanLabel: humanLabels[question.id] }) };
+  });
   for (const condition of semanticConditions) {
     if (condition.requirement !== 'required') continue;
-    const answer = answers[condition.id];
+    const answer = semantic[condition.id];
     const expect = condition.mode === 'semantic' ? condition.expect : true;
-    if (answer !== null && answer !== undefined && answer !== expect) return { outcome: 'reject', checks, semantic: answers };
+    if (answer !== null && answer !== undefined && answer !== expect) return { outcome: 'reject', checks, semantic, provenance };
   }
-  const unknown = checks.some(c => c.status === 'could-not-check') || Object.values(answers).some(value => value === null);
+  const unknown = checks.some(c => c.status === 'could-not-check') || Object.values(semantic).some(value => value === null);
   const preferredMiss = conditions.some(c => c.requirement === 'preferred' && (c.mode === 'exact'
     ? checks.find(x => x.condition.id === c.id)?.status !== 'pass'
-    : answers[c.id] !== (c.mode === 'semantic' ? c.expect : true)));
-  return { outcome: unknown || preferredMiss ? 'maybe' : 'strong', checks, semantic: answers };
+    : semantic[c.id] !== (c.mode === 'semantic' ? c.expect : true)));
+  return { outcome: unknown || preferredMiss ? 'maybe' : 'strong', checks, semantic, provenance };
 }
