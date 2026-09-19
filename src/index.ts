@@ -1,5 +1,6 @@
 export * from './types.js';
 export * from './parser.js';
+export * from './conditions.js';
 export * from './engine.js';
 export * from './fixture-evaluator.js';
 export * from './jev.js';
