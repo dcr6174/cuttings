@@ -9,3 +9,4 @@
 .quick-editor button{border:0;background:none;text-decoration:underline;color:#5c584f;padding:10px 0;min-height:44px;cursor:pointer}
 @keyframes rise{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
 @media(min-width:700px){.quick-sheet{align-items:center;padding:40px}.quick-panel{border:1px solid #171717;padding:36px 44px 64px}}
+.quick-panel .diagnosis{margin-bottom:14px}
