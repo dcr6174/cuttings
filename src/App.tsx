@@ -21,6 +21,10 @@ import type { Amount, Condition, Item, SemanticJudgments, SemanticQuestion } fro
 
 const THRESHOLD = 0.75;
 const SHADOW_ITEM_CAP = 10;
+// The Cuttings proxy holds the TypeSafe key as a server-side secret, so the
+// browser never sees it. Self-hosters can deploy worker/proxy.ts and point
+// the app at their own Worker URL.
+const DEFAULT_JEV_PROXY = 'https://cuttings-jev-proxy.dcr6174.workers.dev';
 
 function ageLabel(publishedAt: string | undefined): string {
   if (!publishedAt) return 'date unknown';
@@ -89,7 +93,7 @@ export function App() {
   const [showMaybe, setShowMaybe] = useState(true);
   const [corrections, setCorrections] = useState<Record<string, boolean>>({});
   const [run, setRun] = useState<Run>({ status: 'loading', items: [], evaluations: {} });
-  const [jevKey, setJevKey] = useState('');
+  const [proxyUrl, setProxyUrl] = useState(DEFAULT_JEV_PROXY);
   const [shadow, setShadow] = useState<{ status: 'idle' | 'running' | 'done' | 'error'; error?: string; judgments: Record<string, SemanticJudgments> }>({ status: 'idle', judgments: {} });
   const [provenance, setProvenance] = useState<StoredProvenance[]>(() => loadProvenance());
   const [labels, setLabels] = useState<Record<string, boolean>>(() => loadLabels());
@@ -177,7 +181,7 @@ export function App() {
 
   const questions = semanticQuestions(conditions);
   const runShadow = async () => {
-    const evaluator = new JevEvaluator(jevKey.trim());
+    const evaluator = new JevEvaluator('', { baseUrl: proxyUrl.trim() });
     setShadow({ status: 'running', judgments: {} });
     const judgments: Record<string, SemanticJudgments> = {};
     const records: StoredProvenance[] = [];
@@ -284,10 +288,10 @@ export function App() {
 
     {tab === 'jev' && <section className="view">
       <div className="section-title"><div><p className="eyebrow">Shadow mode</p><h2>Jev</h2></div></div>
-      <p className="intro">Jev answers the meaning questions for this search without changing the ranking. Every answer is stored as replayable provenance so you can calibrate confidence before trusting it. The key lives only in this tab and is never saved.</p>
+      <p className="intro">Jev answers the meaning questions for this search without changing the ranking. Every answer is stored as replayable provenance so you can calibrate confidence before trusting it. Calls go through the Cuttings proxy, which keeps the TypeSafe key on the server. No key is typed, saved, or sent from this browser.</p>
       <div className="picker">
-        <input type="password" aria-label="TypeSafe API key" value={jevKey} onChange={e => setJevKey(e.target.value)} placeholder="TypeSafe API key (session only)" autoComplete="off" />
-        <button disabled={!jevKey.trim() || shadow.status === 'running' || questions.length === 0 || run.status !== 'ready'} onClick={runShadow}>{shadow.status === 'running' ? 'Running…' : 'Run shadow check'}</button>
+        <input type="url" aria-label="Jev proxy URL" value={proxyUrl} onChange={e => setProxyUrl(e.target.value)} placeholder="Jev proxy URL" autoComplete="off" spellCheck={false} />
+        <button disabled={!proxyUrl.trim() || shadow.status === 'running' || questions.length === 0 || run.status !== 'ready'} onClick={runShadow}>{shadow.status === 'running' ? 'Running…' : 'Run shadow check'}</button>
       </div>
       {questions.length === 0 && <p className="note">This search has no meaning questions yet. Add one in the Search tab, for example “Mentions pricing”.</p>}
       {shadow.status === 'error' && <p className="miss">Shadow run failed: {shadow.error}. The keyless ranking above is unaffected.</p>}
@@ -328,4 +332,4 @@ export function App() {
 
     <footer><span>{source.label}</span><span>{run.ranAt ? `Last run ${run.ranAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : 'Not run yet'}</span></footer>
   </main>;
-    }
+}
