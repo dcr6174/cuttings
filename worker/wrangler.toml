@@ -1,1 +1,7 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "cuttings-jev-proxy"
+main = "proxy.ts"
+compatibility_date = "2026-09-19"
 
+# Set the key once, as an encrypted server-side secret (never in this file):
+#   npx wrangler secret put TYPESAFE_JEV_KEY
