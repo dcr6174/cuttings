@@ -1,0 +1,16 @@
+{
+  "name": "cuttings",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Saved searches that catch up automatically, with visible exact checks and optional semantic evaluation.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  }
+}
