@@ -1,15 +1,25 @@
 {
   "name": "cuttings",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
   "description": "Saved searches that catch up automatically, with visible exact checks and optional semantic evaluation.",
   "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "react": "latest",
+    "react-dom": "latest"
   },
   "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
     "typescript": "^5.6.3",
     "vitest": "^2.1.9"
   }
