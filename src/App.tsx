@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { evaluateItem, type Evaluation } from './engine';
 import { splitConditions } from './parser';
 import { buildConditions } from './conditions';
@@ -23,6 +23,15 @@ import type { Amount, Condition, Item, SemanticJudgments, SemanticQuestion } fro
 
 const THRESHOLD = 0.75;
 const SHADOW_ITEM_CAP = 10;
+
+/**
+ * A small, dependency-free adaptation of Rare UI's animated-counter motion.
+ * The value stays exact while each change settles into place visually.
+ * Rare UI: https://rareui.com/components/animatedcounter
+ */
+function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string }) {
+  return <span key={`${value}${suffix}`} className="animated-number" aria-label={`${value}${suffix}`}>{value}{suffix}</span>;
+}
 // The Cuttings proxy holds the TypeSafe key as a server-side secret, so the
 // browser never sees it. Self-hosters can deploy worker/proxy.ts and point
 // the app at their own Worker URL.
@@ -301,10 +310,10 @@ export function App() {
 
   return <main>
     <header className="mast"><p className="eyebrow">{today}</p><h1>Cuttings</h1><p>Saved searches that catch up when you open them.</p></header>
-    <nav aria-label="Main">
+    <nav className={`fluid-tabs tab-${tab}`} aria-label="Main">
       <button className={tab === 'digest' ? 'active' : ''} onClick={() => setTab('digest')}>Digest</button>
       <button className={tab === 'search' ? 'active' : ''} onClick={() => setTab('search')}>Search</button>
-      <button className={tab === 'rejects' ? 'active' : ''} onClick={() => setTab('rejects')}>Rejects <span>{groups.reject.length}</span></button>
+      <button className={tab === 'rejects' ? 'active' : ''} onClick={() => setTab('rejects')}>Rejects <span><AnimatedNumber value={groups.reject.length} /></span></button>
       <button className={tab === 'jev' ? 'active' : ''} onClick={() => setTab('jev')}>Jev</button>
     </nav>
     <button className="universal-search" onClick={() => setQuickOpen(true)} aria-label="Search now">
@@ -339,16 +348,16 @@ export function App() {
     </div>}
 
     {tab === 'digest' && <section className="view settle">
-      <div className="section-title"><div><p className="eyebrow">{search.name}</p><h2>Your catch-up</h2></div><span>{run.items.length} read</span></div>
+      <div className="section-title"><div><p className="eyebrow">{search.name}</p><h2>Your catch-up</h2></div><span><AnimatedNumber value={run.items.length} /> read</span></div>
       {run.status === 'loading' && <p className="intro">Checking {source.label}…</p>}
       {run.status === 'error' && <p className="miss">Could not load {source.label}: {run.error}</p>}
       {run.status === 'ready' && <>
-        <section><h2 className="band">Strong matches <span>{groups.strong.length}</span></h2>{groups.strong.map(x => card(x, 'strong'))}</section>
-        <section><button className="drawer" onClick={() => setShowMaybe(!showMaybe)} aria-expanded={showMaybe}><span>Maybes <b>{groups.maybe.length}</b></span><span>{showMaybe ? '−' : '+'}</span></button>{showMaybe && <div className="drawer-body">{groups.maybe.map(x => card(x, 'maybe'))}</div>}</section>
+        <section><h2 className="band">Strong matches <span><AnimatedNumber value={groups.strong.length} /></span></h2>{groups.strong.map(x => card(x, 'strong'))}</section>
+        <section><button className="drawer" onClick={() => setShowMaybe(!showMaybe)} aria-expanded={showMaybe}><span>Maybes <b><AnimatedNumber value={groups.maybe.length} /></b></span><span>{showMaybe ? '−' : '+'}</span></button>{showMaybe && <div className="drawer-body">{groups.maybe.map(x => card(x, 'maybe'))}</div>}</section>
       </>}
     </section>}
 
-    {tab === 'search' && <section className="view search-editor" ref={searchEditor}>
+    {tab === 'search' && <section className="view search-editor settle" ref={searchEditor}>
       <div className="section-title"><div><p className="eyebrow">Saved searches</p><h2>{search.name}</h2></div></div>
       <div className="picker">
         <select aria-label="Choose a saved search" value={search.id} onChange={e => setSelectedId(e.target.value)}>{searches.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
@@ -372,13 +381,13 @@ export function App() {
       <div className="diagnosis"><strong>{conditions.filter(x => x.mode === 'exact').length} exact</strong><span>{conditions.filter(x => x.mode === 'semantic').length} meaning</span><span>{conditions.filter(x => x.mode === 'ambiguous').length} needs attention</span></div>
     </section>}
 
-    {tab === 'rejects' && <section className="view">
-      <div className="section-title"><div><p className="eyebrow">Why they missed</p><h2>Rejects</h2></div><span>{groups.reject.length}</span></div>
+    {tab === 'rejects' && <section className="view settle">
+      <div className="section-title"><div><p className="eyebrow">Why they missed</p><h2>Rejects</h2></div><span><AnimatedNumber value={groups.reject.length} /></span></div>
       <p className="intro">Nothing disappears. Open a result, inspect the failed condition, or mark it so the search can be corrected.</p>
       {groups.reject.map(x => card(x, 'reject'))}
     </section>}
 
-    {tab === 'jev' && <section className="view">
+    {tab === 'jev' && <section className="view settle">
       <div className="section-title"><div><p className="eyebrow">Shadow mode</p><h2>Jev</h2></div></div>
       <p className="intro">Jev answers the meaning questions for this search without changing the ranking. Every answer is stored as replayable provenance so you can calibrate confidence before trusting it. Calls go through the Cuttings proxy, which keeps the TypeSafe key on the server. No key is typed, saved, or sent from this browser.</p>
       <div className="picker">
@@ -400,7 +409,7 @@ export function App() {
             const label = labels[key];
             return <div className="shadow-row" key={q.id}>
               <span>{q.ask}</span>
-              <span>{judgment.result === null ? 'no answer' : judgment.result ? 'yes' : 'no'} · {Math.round(judgment.confidence * 100)}%</span>
+              <span className="confidence"><span className="confidence-track" aria-hidden><i style={{ '--confidence': `${Math.round(judgment.confidence * 100)}%` } as CSSProperties} /></span><span>{judgment.result === null ? 'no answer' : judgment.result ? 'yes' : 'no'} · <AnimatedNumber value={Math.round(judgment.confidence * 100)} suffix="%" /></span></span>
               {judgment.result !== null && <span className="label-buttons">
                 <button className={label === judgment.result ? 'chosen' : ''} onClick={() => setLabels(l => ({ ...l, [key]: judgment.result as boolean }))}>Correct</button>
                 <button className={label !== undefined && label !== judgment.result ? 'chosen' : ''} onClick={() => setLabels(l => ({ ...l, [key]: !(judgment.result as boolean) }))}>Wrong</button>
@@ -424,4 +433,4 @@ export function App() {
 
     <footer><span>{source.label}</span><span>{run.ranAt ? `Last run ${run.ranAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : 'Not run yet'}</span></footer>
   </main>;
-                                                                                                             }
+  }
