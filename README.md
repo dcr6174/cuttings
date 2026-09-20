@@ -347,3 +347,7 @@ A 400 means the app sent something the proxy refuses (too many questions, an une
 ## Current status
 
 Phase 3 working web app, live at https://dcr6174.github.io/cuttings/. Searches persist in the browser, a one-off Search now mode runs the same parser and engine without saving, one legitimate live source is included, and Jev runs in shadow mode with replayable provenance and calibration. Real Jev answers are served through the deployed Cloudflare Worker proxy; the key never leaves the server. Jev answers do not influence ranking yet. Cuttings is not an always-on background service.
+
+### Motion and component credit
+
+The interface uses small, adapted motion patterns inspired by [Rare UI](https://rareui.com/components), including the fluid tab indicator, animated counts, spring-like sheets, and confidence bars. The adaptations keep Cuttings flat, quiet, and readable, and include reduced-motion support. Rare UI components are free to use and modify; attribution is appreciated.
