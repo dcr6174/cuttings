@@ -230,7 +230,7 @@ export function App() {
     return <article key={item.id} className={`listing ${kind} ${openId === item.id ? 'is-open' : ''}`}>
       <button className="listing-head" onClick={() => toggleOpen(item.id)} aria-expanded={openId === item.id}>
         <span className="listing-copy"><small>{item.source} · {ageLabel(item.publishedAt)}</small><h3>{item.title}</h3><p>{amount ? `${amount} · ` : ''}<a href={item.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Open source ↗</a></p></span>
-        <span className="match-score"><b>{reasons.length}</b><small>of {conds.length}</small></span>
+        <span className="match-score" style={{ '--frac': (conds.length ? reasons.length / conds.length : 0).toFixed(3) } as CSSProperties}><b>{reasons.length}</b><small>of {conds.length}</small></span>
       </button>
       <div className="listing-body">
         <p>{item.text || 'No description supplied by the source.'}</p>
@@ -310,9 +310,14 @@ export function App() {
 
   return <main>
     <header className="mast">
-      <div className="brand-lockup"><span className="brand-mark" aria-hidden><i /><i /><i /></span><span className="brand-word">Cuttings</span></div>
-      <div className="mast-copy"><div><p className="eyebrow">Personal signal desk · {today}</p><h1>Find what<br/><em>matters.</em></h1></div><p>Saved searches that catch up when you open them. Exact checks first. Every decision visible.</p></div>
-      <div className="mast-meta"><span><i className="status-dot" /> Live sources</span><span>{searches.length.toString().padStart(2, '0')} saved searches</span><span>Private to this browser</span></div>
+      <div className="brand-lockup"><span className="brand-mark" aria-hidden><i /><i /><i /></span><span className="brand-word">Cuttings</span><span className="brand-side"><i className="status-dot" /> Live</span></div>
+      <div className="mast-copy"><p className="eyebrow">Personal signal desk · {today}</p><h1>Find what <em>matters.</em></h1><p>Saved searches that catch up when you open them. Exact checks first. Every decision visible.</p></div>
+      <button className="prompt-bar" onClick={() => setQuickOpen(true)} aria-label="Search now">
+        <span className="pb-icon" aria-hidden>⌕</span>
+        <span className="pb-text">Describe what you are looking for…</span>
+        <span className="pb-go">Search now</span>
+      </button>
+      <div className="mast-meta"><span>{searches.length.toString().padStart(2, '0')} saved searches</span><span>Exact first · meaning visible</span><span>Private to this browser</span></div>
     </header>
     <nav className={`fluid-tabs tab-${tab}`} aria-label="Main">
       <button className={tab === 'digest' ? 'active' : ''} onClick={() => setTab('digest')}>Digest</button>
@@ -320,9 +325,6 @@ export function App() {
       <button className={tab === 'rejects' ? 'active' : ''} onClick={() => setTab('rejects')}>Rejects <span><AnimatedNumber value={groups.reject.length} /></span></button>
       <button className={tab === 'jev' ? 'active' : ''} onClick={() => setTab('jev')}>Jev</button>
     </nav>
-    <button className="universal-search" onClick={() => setQuickOpen(true)} aria-label="Search now">
-      <span aria-hidden>⌕</span> Search
-    </button>
 
     {quickOpen && <div className="quick-sheet" role="dialog" aria-modal="true" aria-label="Search now" onClick={e => { if (e.target === e.currentTarget) setQuickOpen(false); }}>
       <div className="quick-panel">
