@@ -229,8 +229,8 @@ export function App() {
     const amount = formatAmount(item.amount);
     return <article key={item.id} className={`listing ${kind} ${openId === item.id ? 'is-open' : ''}`}>
       <button className="listing-head" onClick={() => toggleOpen(item.id)} aria-expanded={openId === item.id}>
-        <span><small>{item.source} · {ageLabel(item.publishedAt)}</small><h3>{item.title}</h3><p>{amount ? `${amount} · ` : ''}<a href={item.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Original ↗</a></p></span>
-        <b>{reasons.length}/{conds.length}</b>
+        <span className="listing-copy"><small>{item.source} · {ageLabel(item.publishedAt)}</small><h3>{item.title}</h3><p>{amount ? `${amount} · ` : ''}<a href={item.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Open source ↗</a></p></span>
+        <span className="match-score"><b>{reasons.length}</b><small>of {conds.length}</small></span>
       </button>
       <div className="listing-body">
         <p>{item.text || 'No description supplied by the source.'}</p>
@@ -309,7 +309,11 @@ export function App() {
   const source = sources[search.sourceId] ?? sources['sample-flats']!;
 
   return <main>
-    <header className="mast"><p className="eyebrow">{today}</p><h1>Cuttings</h1><p>Saved searches that catch up when you open them.</p></header>
+    <header className="mast">
+      <div className="brand-lockup"><span className="brand-mark" aria-hidden><i /><i /><i /></span><span className="brand-word">Cuttings</span></div>
+      <div className="mast-copy"><div><p className="eyebrow">Personal signal desk · {today}</p><h1>Find what<br/><em>matters.</em></h1></div><p>Saved searches that catch up when you open them. Exact checks first. Every decision visible.</p></div>
+      <div className="mast-meta"><span><i className="status-dot" /> Live sources</span><span>{searches.length.toString().padStart(2, '0')} saved searches</span><span>Private to this browser</span></div>
+    </header>
     <nav className={`fluid-tabs tab-${tab}`} aria-label="Main">
       <button className={tab === 'digest' ? 'active' : ''} onClick={() => setTab('digest')}>Digest</button>
       <button className={tab === 'search' ? 'active' : ''} onClick={() => setTab('search')}>Search</button>
@@ -331,7 +335,7 @@ export function App() {
         </div>
         {quickSource.kind === 'live' && <div className="picker"><input aria-label="Live source query" value={quickQuery} onChange={e => setQuickQuery(e.target.value)} placeholder="Words to search for" /></div>}
         {quickConditions.length > 0 && <div className="diagnosis"><strong>{quickConditions.filter(x => x.mode === 'exact').length} exact</strong><span>{quickConditions.filter(x => x.mode === 'semantic').length} meaning</span><span>{quickConditions.filter(x => x.mode === 'ambiguous').length} needs attention</span></div>}
-        {quickRun.status === 'loading' && <p className="intro">Checking {quickSource.label}…</p>}
+        {quickRun.status === 'loading' && <p className="intro loading-line"><span className="thinking-orbs" aria-hidden><i/><i/><i/></span>Checking {quickSource.label}…</p>}
         {quickRun.status === 'error' && <p className="miss">Could not load {quickSource.label}: {quickRun.error}</p>}
         {quickRun.status === 'ready' && <>
           <section><h2 className="band">Strong matches <span>{quickGroups.strong.length}</span></h2>{quickGroups.strong.map(x => quickCard(x, 'strong'))}</section>
@@ -349,7 +353,7 @@ export function App() {
 
     {tab === 'digest' && <section className="view settle">
       <div className="section-title"><div><p className="eyebrow">{search.name}</p><h2>Your catch-up</h2></div><span><AnimatedNumber value={run.items.length} /> read</span></div>
-      {run.status === 'loading' && <p className="intro">Checking {source.label}…</p>}
+      {run.status === 'loading' && <p className="intro loading-line"><span className="thinking-orbs" aria-hidden><i/><i/><i/></span>Checking {source.label}…</p>}
       {run.status === 'error' && <p className="miss">Could not load {source.label}: {run.error}</p>}
       {run.status === 'ready' && <>
         <section><h2 className="band">Strong matches <span><AnimatedNumber value={groups.strong.length} /></span></h2>{groups.strong.map(x => card(x, 'strong'))}</section>
@@ -434,3 +438,4 @@ export function App() {
     <footer><span>{source.label}</span><span>{run.ranAt ? `Last run ${run.ranAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : 'Not run yet'}</span></footer>
   </main>;
   }
+
