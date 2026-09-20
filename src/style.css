@@ -76,8 +76,9 @@ main{width:min(100% - 36px,780px);margin:0 auto;min-height:100vh;position:relati
 .fluid-tabs.tab-search::after{transform:translateX(100%)}
 .fluid-tabs.tab-rejects::after{transform:translateX(200%)}
 .fluid-tabs.tab-jev::after{transform:translateX(300%)}
-.fluid-tabs button{border:0;background:none;padding:12px 6px;min-height:46px;font-size:.82rem;font-weight:500;color:var(--muted);
-  letter-spacing:-.01em;transition:color .3s ease,transform .22s var(--pop)}
+.fluid-tabs button{border:0;background:none;padding:9px 6px;min-height:40px;font-size:.82rem;font-weight:500;color:var(--muted);
+  letter-spacing:-.01em;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;
+  transition:color .3s ease,transform .22s var(--pop)}
 .fluid-tabs button:active{transform:scale(.94)}
 .fluid-tabs button.active{color:var(--ink);font-weight:600;animation:text-swap .34s var(--ease)}
 .fluid-tabs span{display:inline-block;background:var(--acid-dim);color:var(--acid);border-radius:999px;padding:2px 7px;font-size:.6rem;font-family:"DM Mono",monospace;animation:badge-slide .36s var(--pop)}
