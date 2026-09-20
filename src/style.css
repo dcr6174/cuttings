@@ -136,7 +136,6 @@ main{width:min(100% - 36px,780px);margin:0 auto;min-height:100vh;position:relati
 .listing-body>*{min-height:0}
 .listing.is-open .listing-body{grid-template-rows:1fr;padding:0 18px 22px;opacity:1}
 .listing-body ul{list-style:none;padding:10px 0 2px;margin:0;line-height:1.9;font-size:.85rem;color:var(--ink-dim)}
-.listing-body ul li::before{content:"✓";color:var(--acid);margin-right:8px}
 .miss{color:var(--warm)!important;font-weight:600}
 .condition.ambiguous p,.miss{animation:error-settle .38s var(--ease)}
 @keyframes error-settle{0%,100%{transform:translateX(0)}35%{transform:translateX(3px)}65%{transform:translateX(-2px)}}
