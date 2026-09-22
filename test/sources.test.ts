@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createHackerNewsSource, mapHnHit, sampleFlatsSource } from '../src/sources.js';
 import { sampleItems, SAMPLE_FIXTURES } from '../src/sample-feed.js';
 import { parseConditions } from '../src/parser.js';
@@ -30,6 +30,12 @@ describe('Hacker News adapter', () => {
   it('surfaces API errors instead of swallowing them', async () => {
     const fetchFn = (async () => ({ ok: false, status: 503 })) as unknown as typeof fetch;
     await expect(createHackerNewsSource(fetchFn).fetchItems('ai')).rejects.toThrow('503');
+  });
+  it('forwards cancellation to the live source request', async () => {
+    const controller = new AbortController();
+    const fetchFn = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ hits: [] }) }) as unknown as Response);
+    await createHackerNewsSource(fetchFn).fetchItems('ai', controller.signal);
+    expect(fetchFn).toHaveBeenCalledWith(expect.stringContaining('query=ai'), { signal: controller.signal });
   });
 });
 

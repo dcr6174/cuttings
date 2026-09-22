@@ -16,6 +16,9 @@
 
 export interface ProxyEnv {
   TYPESAFE_JEV_KEY?: string;
+  JEV_RATE_LIMITER?: {
+    limit(options: { key: string }): Promise<{ success: boolean }>;
+  };
 }
 
 const ALLOWED_ORIGIN = 'https://dcr6174.github.io';
@@ -30,6 +33,7 @@ const MAX_CRITERIA_CHARS = 1000;
 const MAX_STATE_ENTRIES = 8;
 const MAX_STATE_KEY_CHARS = 64;
 const MAX_STATE_VALUE_CHARS = 4000;
+const UPSTREAM_TIMEOUT_MS = 15_000;
 
 function corsHeaders(origin: string): Record<string, string> {
   return origin === ALLOWED_ORIGIN
@@ -37,10 +41,18 @@ function corsHeaders(origin: string): Record<string, string> {
     : {};
 }
 
+function responseHeaders(origin: string): Record<string, string> {
+  return {
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+    ...corsHeaders(origin),
+  };
+}
+
 function json(status: number, body: unknown, origin: string): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', ...corsHeaders(origin) },
+    headers: { 'content-type': 'application/json', ...responseHeaders(origin) },
   });
 }
 
@@ -142,6 +154,19 @@ export async function handleFetch(request: Request, env: ProxyEnv): Promise<Resp
   if (request.method !== 'POST') return json(405, { error: 'Only POST is allowed.' }, origin);
   if (origin !== ALLOWED_ORIGIN) return json(403, { error: 'Origin is not allowed.' }, origin);
 
+  // CORS is a browser boundary, not authentication. The rate-limit binding is
+  // the actual cost-control boundary for scripted clients that can forge Origin.
+  // Fail closed in production if the binding has not been configured.
+  if (!env.JEV_RATE_LIMITER) return json(503, { error: 'The proxy rate limiter is not configured.' }, origin);
+  const clientAddress = request.headers.get('cf-connecting-ip') ?? 'unknown';
+  const allowance = await env.JEV_RATE_LIMITER.limit({ key: clientAddress });
+  if (!allowance.success) {
+    return new Response(JSON.stringify({ error: 'Too many requests. Try again shortly.' }), {
+      status: 429,
+      headers: { 'content-type': 'application/json', 'retry-after': '60', ...responseHeaders(origin) },
+    });
+  }
+
   const declared = Number(request.headers.get('content-length') ?? '0');
   if (declared > MAX_BODY_BYTES) return json(413, { error: 'Body is over the 16 KB cap.' }, origin);
   const text = await request.text();
@@ -171,6 +196,7 @@ export async function handleFetch(request: Request, env: ProxyEnv): Promise<Resp
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${env.TYPESAFE_JEV_KEY}` },
       body: JSON.stringify(outbound),
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch {
     return json(502, { error: 'The TypeSafe API could not be reached.' }, origin);
@@ -178,7 +204,7 @@ export async function handleFetch(request: Request, env: ProxyEnv): Promise<Resp
   const result = await upstream.text();
   return new Response(result, {
     status: upstream.status,
-    headers: { 'content-type': 'application/json', ...corsHeaders(origin) },
+    headers: { 'content-type': 'application/json', ...responseHeaders(origin) },
   });
 }
 

@@ -3,5 +3,12 @@ name = "cuttings-jev-proxy"
 main = "proxy.ts"
 compatibility_date = "2026-09-19"
 
+# Cloudflare's native binding limits each client IP to 20 Jev calls per minute.
+# The namespace ID only needs to be unique among this account's rate limiters.
+[[ratelimits]]
+name = "JEV_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
+
 # Set the key once, as an encrypted server-side secret (never in this file):
 #   npx wrangler secret put TYPESAFE_JEV_KEY

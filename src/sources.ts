@@ -5,7 +5,7 @@ export interface SourceAdapter {
   readonly id: string;
   readonly label: string;
   readonly kind: 'sample' | 'live';
-  fetchItems(query: string): Promise<Item[]>;
+  fetchItems(query: string, signal?: AbortSignal): Promise<Item[]>;
 }
 
 export const sampleFlatsSource: SourceAdapter = {
@@ -48,9 +48,9 @@ export function createHackerNewsSource(fetchFn: typeof fetch = (input, init) => 
     id: 'hackernews',
     label: 'Hacker News (live)',
     kind: 'live',
-    async fetchItems(query: string): Promise<Item[]> {
+    async fetchItems(query: string, signal?: AbortSignal): Promise<Item[]> {
       const params = new URLSearchParams({ query, tags: 'story', hitsPerPage: '20' });
-      const response = await fetchFn(`https://hn.algolia.com/api/v1/search_by_date?${params.toString()}`);
+      const response = await fetchFn(`https://hn.algolia.com/api/v1/search_by_date?${params.toString()}`, signal ? { signal } : undefined);
       if (!response.ok) throw new Error(`Hacker News API returned ${response.status}.`);
       const data = await response.json() as { hits?: HnHit[] };
       return (data.hits ?? []).map(mapHnHit).filter((item): item is Item => item !== undefined);

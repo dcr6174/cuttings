@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleFetch } from '../worker/proxy.js';
 
 const ORIGIN = 'https://dcr6174.github.io';
-const ENV = { TYPESAFE_JEV_KEY: 'test-key' };
+const allowAll = { limit: vi.fn(async () => ({ success: true })) };
+const ENV = { TYPESAFE_JEV_KEY: 'test-key', JEV_RATE_LIMITER: allowAll };
 
 function request(body: unknown, init: { origin?: string | null; method?: string; path?: string; contentLength?: string } = {}): Request {
   const url = `https://cuttings-jev-proxy.dcr6174.workers.dev${init.path ?? '/v1/systemone'}`;
@@ -59,6 +60,19 @@ describe('Jev proxy', () => {
   it('only allows POST', async () => {
     const response = await handleFetch(request(null, { method: 'GET' }), ENV);
     expect(response.status).toBe(405);
+  });
+  it('fails closed when the rate limiter binding is missing', async () => {
+    const response = await handleFetch(request(validBody), { TYPESAFE_JEV_KEY: 'test-key' });
+    expect(response.status).toBe(503);
+  });
+  it('rate limits by the Cloudflare client address before calling upstream', async () => {
+    const limiter = { limit: vi.fn(async () => ({ success: false })) };
+    const req = request(validBody);
+    req.headers.set('cf-connecting-ip', '203.0.113.10');
+    const response = await handleFetch(req, { ...ENV, JEV_RATE_LIMITER: limiter });
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(limiter.limit).toHaveBeenCalledWith({ key: '203.0.113.10' });
   });
   it('rejects a declared body over 16 KB', async () => {
     const response = await handleFetch(request(validBody, { contentLength: String(17 * 1024) }), ENV);
@@ -121,7 +135,7 @@ describe('Jev proxy', () => {
     expect(response.status).toBe(401);
   });
   it('fails closed when the secret is not configured', async () => {
-    const response = await handleFetch(request(validBody), {});
+    const response = await handleFetch(request(validBody), { JEV_RATE_LIMITER: allowAll });
     expect(response.status).toBe(500);
     expect((await response.json()).error).toContain('no API key');
   });

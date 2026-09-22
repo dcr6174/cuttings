@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   appendProvenance,
   deserializeSearches,
+  hasSavedSearchState,
   loadLabels,
   loadProvenance,
   loadSearches,
@@ -41,6 +42,13 @@ describe('saved search persistence', () => {
   });
   it('serializes deterministically', () => {
     expect(deserializeSearches(serializeSearches([sample]))).toEqual([sample]);
+  });
+  it('distinguishes an intentionally empty saved list from first use', () => {
+    expect(hasSavedSearchState(memoryStorage())).toBe(false);
+    const storage = memoryStorage();
+    saveSearches([], storage);
+    expect(hasSavedSearchState(storage)).toBe(true);
+    expect(loadSearches(storage)).toEqual([]);
   });
 });
 
