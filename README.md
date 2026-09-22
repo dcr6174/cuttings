@@ -180,6 +180,7 @@ The Worker is strict on purpose. It allows only:
 - the fixed model `jev-latest`
 - 1 to 4 boolean questions per call, with capped question, field, and state sizes
 - no unexpected top-level fields (they are rejected with a 400)
+- 20 Jev calls per client IP per minute through Cloudflare's native rate limiter
 
 The key is stored as the encrypted Worker secret `TYPESAFE_JEV_KEY`. It is never in the repository, the app bundle, or the browser.
 
@@ -200,6 +201,11 @@ npx wrangler login
 npx wrangler deploy --config wrangler.toml
 npx wrangler secret put TYPESAFE_JEV_KEY   # paste the key when asked
 ```
+
+The checked-in Wrangler configuration creates the `JEV_RATE_LIMITER` binding.
+The Worker fails closed if that binding is missing, so self-hosted dashboard
+deployments must create an equivalent rate-limiting binding before Jev calls
+will be accepted.
 
 Option B, in the Cloudflare dashboard:
 

@@ -62,6 +62,14 @@ export function loadSearches(storage: StorageLike | undefined = defaultStorage()
   return deserializeSearches(storage?.getItem(SEARCHES_KEY) ?? null);
 }
 
+export function hasSavedSearchState(storage: StorageLike | undefined = defaultStorage()): boolean {
+  try {
+    return storage?.getItem(SEARCHES_KEY) !== null && storage !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 export function saveSearches(searches: readonly SavedSearch[], storage: StorageLike | undefined = defaultStorage()): void {
   try {
     storage?.setItem(SEARCHES_KEY, serializeSearches(searches));

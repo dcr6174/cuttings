@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import { evaluateItem, type Evaluation } from './engine';
 import { splitConditions } from './parser';
 import { buildConditions } from './conditions';
@@ -8,8 +8,10 @@ import { JevEvaluator } from './jev';
 import { sources } from './sources';
 import { SAMPLE_FIXTURES } from './sample-feed';
 import { summarizeCalibration, replayAccepted } from './calibration';
+import { AnimatedNumber, ListingCard } from './ui';
 import {
   appendProvenance,
+  hasSavedSearchState,
   loadLabels,
   loadProvenance,
   loadSearches,
@@ -19,39 +21,15 @@ import {
   type SavedSearch,
   type StoredProvenance,
 } from './store';
-import type { Amount, Condition, Item, SemanticJudgments, SemanticQuestion } from './types';
+import type { Condition, Item, SemanticJudgments, SemanticQuestion } from './types';
 
 const THRESHOLD = 0.75;
 const SHADOW_ITEM_CAP = 10;
 
-/**
- * A small, dependency-free adaptation of Rare UI's animated-counter motion.
- * The value stays exact while each change settles into place visually.
- * Rare UI: https://rareui.com/components/animatedcounter
- */
-function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string }) {
-  return <span key={`${value}${suffix}`} className="animated-number" aria-label={`${value}${suffix}`}>{value}{suffix}</span>;
-}
 // The Cuttings proxy holds the TypeSafe key as a server-side secret, so the
 // browser never sees it. Self-hosters can deploy worker/proxy.ts and point
 // the app at their own Worker URL.
 const DEFAULT_JEV_PROXY = 'https://cuttings-jev-proxy.dcr6174.workers.dev';
-
-function ageLabel(publishedAt: string | undefined): string {
-  if (!publishedAt) return 'date unknown';
-  const hours = Math.max(0, (Date.now() - Date.parse(publishedAt)) / 3_600_000);
-  if (hours < 1) return 'just now';
-  if (hours < 24) return `${Math.round(hours)}h ago`;
-  const days = Math.round(hours / 24);
-  return days === 1 ? 'yesterday' : `${days}d ago`;
-}
-
-function formatAmount(amount: Amount | undefined): string | undefined {
-  if (!amount) return undefined;
-  const symbol = amount.currency === 'INR' ? '₹' : amount.currency === 'GBP' ? '£' : amount.currency === 'EUR' ? '€' : '$';
-  const period = amount.period && amount.period !== 'once' ? ` / ${amount.period}` : '';
-  return `${symbol}${amount.value.toLocaleString('en-IN')}${period}`;
-}
 
 function parsedKind(mode: Condition['mode']): string {
   return mode === 'exact' ? 'Exact' : mode === 'semantic' ? 'Meaning' : 'Needs attention';
@@ -61,27 +39,6 @@ function semanticQuestions(conditions: readonly Condition[]): SemanticQuestion[]
   return conditions.filter(c => c.mode !== 'exact').map(c => c.mode === 'semantic'
     ? { id: c.id, ask: c.ask, expect: c.expect, criteria: c.raw }
     : { id: c.id, ask: c.raw, expect: true, criteria: c.reason });
-}
-
-function reasonData(evaluation: Evaluation, conditions: readonly Condition[]): { reasons: string[]; misses: string[] } {
-  const reasons: string[] = [];
-  const misses: string[] = [];
-  for (const c of conditions) {
-    if (c.mode === 'exact') {
-      const check = evaluation.checks.find(x => x.condition.id === c.id);
-      if (check?.status === 'pass') reasons.push(c.raw);
-      else if (check?.status === 'fail') misses.push(`Failed: ${c.raw}`);
-      else if (check?.status === 'could-not-check') misses.push(check.reason);
-    } else {
-      const record = evaluation.provenance.find(x => x.conditionId === c.id);
-      if (!record) continue;
-      const expect = c.mode === 'semantic' ? c.expect : true;
-      if (record.acceptedResult === null) misses.push(`Uncertain: ${c.raw}`);
-      else if (record.acceptedResult === expect) reasons.push(c.raw);
-      else misses.push(`Failed: ${c.raw}`);
-    }
-  }
-  return { reasons, misses };
 }
 
 interface Run {
@@ -95,7 +52,7 @@ interface Run {
 export function App() {
   const [searches, setSearches] = useState<SavedSearch[]>(() => {
     const stored = loadSearches();
-    return stored.length > 0 ? stored : seedSearches();
+    return hasSavedSearchState() ? stored : seedSearches();
   });
   const [selectedId, setSelectedId] = useState(() => searches[0]?.id ?? '');
   const [tab, setTab] = useState<'digest' | 'search' | 'rejects' | 'jev'>('digest');
@@ -119,6 +76,8 @@ export function App() {
   const [quickSaved, setQuickSaved] = useState(false);
   const [showQuickMaybe, setShowQuickMaybe] = useState(true);
   const [showQuickRejects, setShowQuickRejects] = useState(false);
+  const quickRequest = useRef(0);
+  const quickAbort = useRef<AbortController | null>(null);
 
   useEffect(() => { saveSearches(searches); }, [searches]);
   useEffect(() => { saveLabels(labels); }, [labels]);
@@ -131,23 +90,27 @@ export function App() {
   useEffect(() => {
     if (!search) return;
     let cancelled = false;
+    const controller = new AbortController();
+    const source = sources[search.sourceId] ?? sources['sample-flats']!;
     setRun({ status: 'loading', items: [], evaluations: {} });
     setShadow({ status: 'idle', judgments: {} });
-    const source = sources[search.sourceId] ?? sources['sample-flats']!;
     const evaluator = new FixtureEvaluator(SAMPLE_FIXTURES);
-    (async () => {
+    const execute = async () => {
       try {
-        const items = await source.fetchItems(search.query);
+        const items = await source.fetchItems(search.query, controller.signal);
         const evaluations: Record<string, Evaluation> = {};
         for (const item of items) {
           evaluations[item.id] = await evaluateItem(item, conditions, evaluator, THRESHOLD);
         }
         if (!cancelled) setRun({ status: 'ready', items, evaluations, ranAt: new Date() });
       } catch (error) {
-        if (!cancelled) setRun({ status: 'error', items: [], evaluations: {}, error: error instanceof Error ? error.message : 'The source failed.' });
+        if (!cancelled && !(error instanceof DOMException && error.name === 'AbortError')) {
+          setRun({ status: 'error', items: [], evaluations: {}, error: error instanceof Error ? error.message : 'The source failed.' });
+        }
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    const delay = window.setTimeout(execute, source.kind === 'live' ? 350 : 0);
+    return () => { cancelled = true; window.clearTimeout(delay); controller.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runKey]);
 
@@ -158,15 +121,19 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [quickOpen]);
 
-  if (!search) return <main><p className="intro">No saved searches yet.</p></main>;
-
-  const updateSearch = (patch: Partial<SavedSearch>) => {
-    setSearches(list => list.map(s => s.id === search.id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s));
-  };
   const addSearch = () => {
     const fresh: SavedSearch = { id: `search-${Date.now()}`, name: 'New search', sourceId: 'sample-flats', query: '', conditions: ['Posted within the last 2 days'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     setSearches(list => [...list, fresh]);
     setSelectedId(fresh.id);
+  };
+
+  if (!search) return <><a className="skip-link" href="#content">Skip to content</a><main id="content" className="empty-shell">
+    <div className="brand-lockup"><span className="brand-mark" aria-hidden><i /><i /><i /></span><span className="brand-word">Cuttings</span><span className="brand-side"><i className="status-dot" /> Local-first</span></div>
+    <section className="empty-welcome"><p className="eyebrow">Your signal desk</p><h1>Start with one useful search.</h1><p>Save a few clear rules. Cuttings will sort new items into strong matches, maybes, and rejects—and show its work.</p><button className="promote" onClick={addSearch}>Create a search</button></section>
+  </main></>;
+
+  const updateSearch = (patch: Partial<SavedSearch>) => {
+    setSearches(list => list.map(s => s.id === search.id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s));
   };
   const removeSearch = () => {
     if (!window.confirm(`Delete "${search.name}"? This cannot be undone.`)) return;
@@ -178,20 +145,33 @@ export function App() {
   };
   const addCondition = () => { const value = draft.trim(); if (value) { updateSearch({ conditions: [...search.conditions, value] }); setDraft(''); } };
   const quickSource = sources[quickSourceId] ?? sources['sample-flats']!;
+  const invalidateQuickRun = () => {
+    quickRequest.current += 1;
+    quickAbort.current?.abort();
+    setQuickRun({ status: 'idle', items: [], evaluations: {} });
+    setQuickOpenId(null);
+    setQuickSaved(false);
+  };
   const runQuick = async () => {
     if (quickConditions.length === 0) return;
+    const requestId = ++quickRequest.current;
+    quickAbort.current?.abort();
+    const controller = new AbortController();
+    quickAbort.current = controller;
     const evaluator = new FixtureEvaluator(SAMPLE_FIXTURES);
     setQuickSaved(false);
     setQuickRun({ status: 'loading', items: [], evaluations: {} });
     try {
-      const items = await quickSource.fetchItems(quickQuery.trim());
+      const items = await quickSource.fetchItems(quickQuery.trim(), controller.signal);
       const evaluations: Record<string, Evaluation> = {};
       for (const item of items) {
         evaluations[item.id] = await evaluateItem(item, quickConditions, evaluator, THRESHOLD);
       }
-      setQuickRun({ status: 'ready', items, evaluations, ranAt: new Date() });
+      if (requestId === quickRequest.current) setQuickRun({ status: 'ready', items, evaluations, ranAt: new Date() });
     } catch (error) {
-      setQuickRun({ status: 'error', items: [], evaluations: {}, error: error instanceof Error ? error.message : 'The source failed.' });
+      if (requestId === quickRequest.current && !(error instanceof DOMException && error.name === 'AbortError')) {
+        setQuickRun({ status: 'error', items: [], evaluations: {}, error: error instanceof Error ? error.message : 'The source failed.' });
+      }
     }
   };
   const saveQuick = () => {
@@ -224,31 +204,14 @@ export function App() {
     quickGroups[outcome].push(item);
   }
 
-  const listingCard = (item: Item, kind: string, evaluation: Evaluation | undefined, conds: readonly Condition[], openId: string | null, toggleOpen: (id: string) => void, extra?: ReactNode) => {
-    const { reasons, misses } = evaluation ? reasonData(evaluation, conds) : { reasons: [], misses: [] };
-    const amount = formatAmount(item.amount);
-    return <article key={item.id} className={`listing ${kind} ${openId === item.id ? 'is-open' : ''}`}>
-      <button className="listing-head" onClick={() => toggleOpen(item.id)} aria-expanded={openId === item.id}>
-        <span className="listing-copy"><small>{item.source} · {ageLabel(item.publishedAt)}</small><h3>{item.title}</h3><p>{amount ? `${amount} · ` : ''}<a href={item.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Open source ↗</a></p></span>
-        <span className="match-score" style={{ '--frac': (conds.length ? reasons.length / conds.length : 0).toFixed(3) } as CSSProperties}><b>{reasons.length}</b><small>of {conds.length}</small></span>
-      </button>
-      <div className="listing-body">
-        <p>{item.text || 'No description supplied by the source.'}</p>
-        <ul>{reasons.map(x => <li key={x}>✓ {x}</li>)}</ul>
-        {misses.map(x => <p className="miss" key={x}>{x}</p>)}
-        {extra}
-      </div>
-    </article>;
-  };
-
-  const card = (item: Item, kind: string) => listingCard(item, kind, run.evaluations[item.id], conditions, open, id => setOpen(open === id ? null : id),
+  const card = (item: Item, kind: string) => <ListingCard key={item.id} item={item} kind={kind} evaluation={run.evaluations[item.id]} conditions={conditions} expanded={open === item.id} onToggle={() => setOpen(open === item.id ? null : item.id)} extra={
     kind === 'reject'
       ? (corrections[item.id]
         ? <p className="note">Marked for correction. Adjust the conditions in the Search tab.</p>
         : <button className="promote" onClick={() => setCorrections(c => ({ ...c, [item.id]: true }))}>This should be a maybe</button>)
-      : undefined);
+      : undefined} />;
 
-  const quickCard = (item: Item, kind: string) => listingCard(item, kind, quickRun.evaluations[item.id], quickConditions, quickOpenId, id => setQuickOpenId(current => current === id ? null : id));
+  const quickCard = (item: Item, kind: string) => <ListingCard key={item.id} item={item} kind={kind} evaluation={quickRun.evaluations[item.id]} conditions={quickConditions} expanded={quickOpenId === item.id} onToggle={() => setQuickOpenId(current => current === item.id ? null : item.id)} />;
 
   const questions = semanticQuestions(conditions);
   const runShadow = async () => {
@@ -308,16 +271,16 @@ export function App() {
   const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const source = sources[search.sourceId] ?? sources['sample-flats']!;
 
-  return <main>
+  return <><a className="skip-link" href="#content">Skip to results</a><main id="content">
     <header className="mast">
-      <div className="brand-lockup"><span className="brand-mark" aria-hidden><i /><i /><i /></span><span className="brand-word">Cuttings</span><span className="brand-side"><i className="status-dot" /> Live</span></div>
-      <div className="mast-copy"><p className="eyebrow">Personal signal desk · {today}</p><h1>Find what <em>matters.</em></h1><p>Saved searches that catch up when you open them. Exact checks first. Every decision visible.</p></div>
+      <div className="brand-lockup"><span className="brand-mark" aria-hidden><i /><i /><i /></span><span className="brand-word">Cuttings</span><span className="brand-side"><i className="status-dot" /> Local-first</span></div>
+      <div className="mast-copy"><p className="eyebrow">Your signal desk · {today}</p><h1>A quieter way to <em>search.</em></h1><p>Save the rules once. Come back to a clear, explainable shortlist.</p></div>
       <button className="prompt-bar" onClick={() => setQuickOpen(true)} aria-label="Search now">
         <span className="pb-icon" aria-hidden>⌕</span>
         <span className="pb-text">Describe what you are looking for…</span>
         <span className="pb-go">Search now</span>
       </button>
-      <div className="mast-meta"><span>{searches.length.toString().padStart(2, '0')} saved searches</span><span>Exact first · meaning visible</span><span>Private to this browser</span></div>
+      <div className="mast-meta"><span>{searches.length.toString().padStart(2, '0')} saved</span><span>Every decision explained</span><span>Stored in this browser</span></div>
     </header>
     <nav className={`fluid-tabs tab-${tab}`} aria-label="Main">
       <button className={tab === 'digest' ? 'active' : ''} onClick={() => setTab('digest')}>Digest</button>
@@ -330,12 +293,12 @@ export function App() {
       <div className="quick-panel">
         <div className="section-title"><div><p className="eyebrow">One-off search</p><h2>Search now</h2></div><button className="quick-close" onClick={() => setQuickOpen(false)} aria-label="Close">×</button></div>
         <p className="intro">Type what you are looking for in plain English. Join rules with "and", or put one rule per line. It runs once against the current feed. Nothing is saved unless you press <strong>Save this search</strong>.</p>
-        <textarea className="quick-input" rows={3} autoFocus value={quickText} onChange={e => { setQuickText(e.target.value); setQuickSaved(false); }} placeholder="Under ₹30,000 per month and posted within the last 2 days and one bedroom" aria-label="What are you looking for" />
+        <textarea className="quick-input" rows={3} autoFocus value={quickText} onChange={e => { setQuickText(e.target.value); invalidateQuickRun(); }} placeholder="Under ₹30,000 per month and posted within the last 2 days and one bedroom" aria-label="What are you looking for" />
         <div className="picker">
-          <select aria-label="Source" value={quickSourceId} onChange={e => setQuickSourceId(e.target.value)}>{Object.values(sources).map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+          <select aria-label="Source" value={quickSourceId} onChange={e => { setQuickSourceId(e.target.value); invalidateQuickRun(); }}>{Object.values(sources).map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
           <button onClick={runQuick} disabled={quickRun.status === 'loading' || quickConditions.length === 0}>{quickRun.status === 'loading' ? 'Searching…' : 'Search now'}</button>
         </div>
-        {quickSource.kind === 'live' && <div className="picker"><input aria-label="Live source query" value={quickQuery} onChange={e => setQuickQuery(e.target.value)} placeholder="Words to search for" /></div>}
+        {quickSource.kind === 'live' && <div className="picker"><input aria-label="Live source query" value={quickQuery} onChange={e => { setQuickQuery(e.target.value); invalidateQuickRun(); }} placeholder="Words to search for" /></div>}
         {quickConditions.length > 0 && <div className="diagnosis"><strong>{quickConditions.filter(x => x.mode === 'exact').length} exact</strong><span>{quickConditions.filter(x => x.mode === 'semantic').length} meaning</span><span>{quickConditions.filter(x => x.mode === 'ambiguous').length} needs attention</span></div>}
         {quickRun.status === 'loading' && <p className="intro loading-line"><span className="thinking-orbs" aria-hidden><i/><i/><i/></span>Checking {quickSource.label}…</p>}
         {quickRun.status === 'error' && <p className="miss">Could not load {quickSource.label}: {quickRun.error}</p>}
@@ -355,10 +318,10 @@ export function App() {
 
     {tab === 'digest' && <section className="view settle">
       <div className="section-title"><div><p className="eyebrow">{search.name}</p><h2>Your catch-up</h2></div><span><AnimatedNumber value={run.items.length} /> read</span></div>
-      {run.status === 'loading' && <p className="intro loading-line"><span className="thinking-orbs" aria-hidden><i/><i/><i/></span>Checking {source.label}…</p>}
-      {run.status === 'error' && <p className="miss">Could not load {source.label}: {run.error}</p>}
+      {run.status === 'loading' && <p className="intro loading-line" role="status"><span className="thinking-orbs" aria-hidden><i/><i/><i/></span>Checking {source.label}…</p>}
+      {run.status === 'error' && <p className="miss" role="alert">Could not load {source.label}: {run.error}</p>}
       {run.status === 'ready' && <>
-        <section><h2 className="band">Strong matches <span><AnimatedNumber value={groups.strong.length} /></span></h2>{groups.strong.map(x => card(x, 'strong'))}</section>
+        <section><h2 className="band">Strong matches <span><AnimatedNumber value={groups.strong.length} /></span></h2>{groups.strong.length === 0 ? <p className="empty-state">No strong matches yet. Maybes below need a closer look.</p> : groups.strong.map(x => card(x, 'strong'))}</section>
         <section><button className="drawer" onClick={() => setShowMaybe(!showMaybe)} aria-expanded={showMaybe}><span>Maybes <b><AnimatedNumber value={groups.maybe.length} /></b></span><span>{showMaybe ? '−' : '+'}</span></button>{showMaybe && <div className="drawer-body">{groups.maybe.map(x => card(x, 'maybe'))}</div>}</section>
       </>}
     </section>}
@@ -390,7 +353,7 @@ export function App() {
     {tab === 'rejects' && <section className="view settle">
       <div className="section-title"><div><p className="eyebrow">Why they missed</p><h2>Rejects</h2></div><span><AnimatedNumber value={groups.reject.length} /></span></div>
       <p className="intro">Nothing disappears. Open a result, inspect the failed condition, or mark it so the search can be corrected.</p>
-      {groups.reject.map(x => card(x, 'reject'))}
+      {groups.reject.length === 0 ? <p className="empty-state">Nothing rejected. Your rules are letting every item through.</p> : groups.reject.map(x => card(x, 'reject'))}
     </section>}
 
     {tab === 'jev' && <section className="view settle">
@@ -438,6 +401,5 @@ export function App() {
     </section>}
 
     <footer><span>{source.label}</span><span>{run.ranAt ? `Last run ${run.ranAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : 'Not run yet'}</span></footer>
-  </main>;
+  </main></>;
   }
-

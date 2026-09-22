@@ -1,12 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&display=swap');
 
-/* Cuttings — night desk.
-   Visual system distilled from the reference study: libraries.dev + transitions.dev
-   (dark, one accent, pill chips), Rare UI + builtbydesigners (hairline rows,
-   bracket counts, restraint), Component Gallery (editorial serif on dark,
-   mono caps labels), Beautiful UI (AI-native rows and confidence treatments).
-   Motion vocabulary uses the transitions.dev tokens: out-expo 250–300ms for
-   state changes, soft overshoot 500ms for entrances, 70ms staggers, 2px blur. */
+/* Cuttings — a restrained editorial night desk: one accent, hairline rows,
+   readable type, and motion only where it explains a state change. */
 
 :root{
   font-family:"Manrope",ui-sans-serif,system-ui,sans-serif;
@@ -17,7 +12,7 @@
   --acid:#c9f06b; --acid-dim:rgba(201,240,107,.14); --on-acid:#141810;
   --warm:#dda384;
   --ease:cubic-bezier(.22,1,.36,1); --pop:cubic-bezier(.34,1.36,.64,1); --in:cubic-bezier(.4,0,.2,1);
-  color:var(--ink); background:var(--bg);
+  color:var(--ink); background:var(--bg);color-scheme:dark;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
@@ -29,19 +24,25 @@ button,a{-webkit-tap-highlight-color:transparent}
 ::selection{background:var(--acid);color:var(--on-acid)}
 :focus-visible{outline:2px solid var(--acid);outline-offset:2px}
 
-main{width:min(100% - 36px,780px);margin:0 auto;min-height:100vh;position:relative}
+.skip-link{position:fixed;z-index:20;left:16px;top:12px;transform:translateY(-160%);background:var(--acid);color:var(--on-acid);padding:10px 14px;border-radius:8px;font-weight:700;text-decoration:none;transition:transform .2s}
+.skip-link:focus{transform:none}
+main{width:min(100% - 36px,820px);margin:0 auto;min-height:100vh;position:relative}
+.empty-shell{padding:30px 2px;display:flex;flex-direction:column}
+.empty-welcome{margin:auto 0;padding:80px 0 18vh;max-width:590px}
+.empty-welcome h1{font:300 clamp(3rem,9vw,5rem)/.98 "Newsreader",Georgia,serif;letter-spacing:-.045em;margin:14px 0 20px}
+.empty-welcome>p:not(.eyebrow){color:var(--ink-dim);line-height:1.7;max-width:52ch;margin:0 0 28px}
 
 /* ---- mast ---- */
 .mast{padding:30px 2px 0;position:relative}
 .brand-lockup{display:flex;align-items:center;gap:10px}
-.brand-word{font:500 .98rem "Newsreader",serif;letter-spacing:.02em}
+.brand-word{font:500 1.08rem "Newsreader",serif;letter-spacing:.01em}
 .brand-mark{width:26px;height:26px;border-radius:50%;background:var(--acid);display:flex;align-items:center;justify-content:center;gap:2px;transform:rotate(-12deg)}
 .brand-mark i{display:block;width:2.5px;background:var(--on-acid);border-radius:3px}
 .brand-mark i:nth-child(1){height:7px}.brand-mark i:nth-child(2){height:12px}.brand-mark i:nth-child(3){height:4px}
 .brand-side{margin-left:auto;display:flex;align-items:center;gap:8px;font:500 .62rem "DM Mono",monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .status-dot{display:inline-block;width:6px;height:6px;background:var(--acid);border-radius:50%;box-shadow:0 0 0 3px rgba(201,240,107,.12)}
-.mast-copy{padding:66px 0 30px}
-.mast h1{font:300 clamp(3.1rem,10.5vw,5.3rem)/.98 "Newsreader",Georgia,serif;letter-spacing:-.045em;margin:14px 0 0;max-width:14ch}
+.mast-copy{padding:54px 0 28px}
+.mast h1{font:300 clamp(2.8rem,9vw,4.65rem)/.98 "Newsreader",Georgia,serif;letter-spacing:-.045em;margin:14px 0 0;max-width:15ch}
 .mast h1 em{font-style:italic;color:var(--acid)}
 .mast-copy>p{color:var(--ink-dim);line-height:1.65;max-width:46ch;margin:22px 0 0;font-size:.93rem}
 
@@ -57,14 +58,6 @@ main{width:min(100% - 36px,780px);margin:0 auto;min-height:100vh;position:relati
 .prompt-bar .pb-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prompt-bar .pb-go{border:0;border-radius:999px;background:var(--acid);color:var(--on-acid);font-weight:700;font-size:.82rem;padding:9px 16px;min-height:38px;transition:transform .24s var(--pop)}
 .prompt-bar .pb-go:active{transform:scale(.93)}
-.prompt-bar:after{content:"";position:absolute;inset:-1px;z-index:2;border-radius:inherit;padding:1px;
-  background:linear-gradient(105deg,transparent 30%,rgba(201,240,107,0) 42%,rgba(201,240,107,.9) 50%,rgba(201,240,107,0) 58%,transparent 70%);
-  background-size:240% 100%;background-position:160% 0;pointer-events:none;opacity:0;
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
-  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;transition:opacity .25s}
-.prompt-bar:hover:after{opacity:1;animation:border-beam 1.25s var(--ease) both}
-@keyframes border-beam{0%{background-position:160% 0}100%{background-position:-60% 0}}
-
 .mast-meta{border-top:1px solid var(--line);margin-top:26px;display:flex;justify-content:space-between;gap:14px;padding:13px 0;color:var(--muted);font:500 .62rem "DM Mono",monospace;text-transform:uppercase;letter-spacing:.09em}
 
 /* ---- tabs: pill segmented control ---- */
@@ -124,18 +117,12 @@ main{width:min(100% - 36px,780px);margin:0 auto;min-height:100vh;position:relati
 .listing:hover .match-score{transform:rotate(4deg) scale(1.05)}
 
 /* open edge beam — one restrained acid pass, only on the open row */
-.listing:after{content:"";position:absolute;inset:0;z-index:2;padding:1px 0;
-  background:linear-gradient(90deg,transparent 25%,rgba(201,240,107,.85) 50%,transparent 75%);
-  background-size:240% 100%;background-position:160% 0;pointer-events:none;opacity:0;
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
-  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;transition:opacity .25s}
-.listing.is-open:after{opacity:1;animation:border-beam 1.25s var(--ease) both}
-
 .listing-body{display:grid;grid-template-rows:0fr;overflow:hidden;padding:0 18px;opacity:0;
   transition:grid-template-rows .45s var(--ease),padding .45s var(--ease),opacity .26s ease}
 .listing-body>*{min-height:0}
 .listing.is-open .listing-body{grid-template-rows:1fr;padding:0 18px 22px;opacity:1}
 .listing-body ul{list-style:none;padding:10px 0 2px;margin:0;line-height:1.9;font-size:.85rem;color:var(--ink-dim)}
+.source-link{display:inline-flex;align-items:center;gap:6px;font-weight:600}
 .miss{color:var(--warm)!important;font-weight:600}
 .condition.ambiguous p,.miss{animation:error-settle .38s var(--ease)}
 @keyframes error-settle{0%,100%{transform:translateX(0)}35%{transform:translateX(3px)}65%{transform:translateX(-2px)}}
@@ -189,6 +176,7 @@ main{width:min(100% - 36px,780px);margin:0 auto;min-height:100vh;position:relati
 .diagnosis strong{background:var(--acid-dim);color:var(--acid);border-color:rgba(201,240,107,.3)}
 
 .note{font-size:.82rem;color:var(--ink-dim);background:var(--surface);border:1px solid var(--line);border-left:2px solid var(--acid);padding:13px 14px;border-radius:10px;line-height:1.6}
+.empty-state{margin:0;padding:24px 2px;border-bottom:1px solid var(--line);color:var(--muted);font-size:.84rem;line-height:1.6}
 
 /* pickers / inputs */
 .picker{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px}
